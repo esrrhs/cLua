@@ -1,0 +1,2 @@
+# luacov
+lua code coverage
