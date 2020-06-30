@@ -74,28 +74,119 @@ void llog(const char *header, const char *file, const char *func, int pos, const
     fclose(pLog);
 }
 
+std::unordered_map <std::string, uint64_t> gdata;
+int gcount;
+int glasttime;
+const int MAX_NAME_SIZE = 128;
 std::string gfile;
+int gautosave;
 
-static void SignalHandlerHook(lua_State *L, lua_Debug *par) {
-    LLOG("SignalHandlerHook %s %d", par->source, par->currentline);
+static void flush_file(int fd, const char *buf, size_t len) {
+    while (len > 0) {
+        ssize_t r = write(fd, buf, len);
+        buf += r;
+        len -= r;
+    }
 }
 
-extern "C" int start_cov(lua_State *L, const char *file) {
-    lua_sethook(gL, hook_handler, LUA_MASKLINE, 0);
-    gfile = file;
-    return 0;
+static void flush() {
+    int fd = open(gfile.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0666);
+    if (fd < 0) {
+        LERR("open file fail %s", gfile.c_str());
+        return;
+    }
+
+    struct Save {
+        char name[MAX_NAME_SIZE];
+        uint64_t count;
+    };
+    const int MAX_SAVE_NUM = 1024;
+    Save save[MAX_SAVE_NUM];
+    int savenum = 0;
+    for (std::unordered_map<std::string, uint64_t>::iterator it = gdata.begin(); it != gdata.end(); it++) {
+        if (savenum >= MAX_SAVE_NUM) {
+            flush_file(fd, (const char *) &save, sizeof(save));
+            memset(&save, sizeof(save), 0);
+            savenum = 0;
+        }
+        strncpy(save[savenum].name, it->first.c_str(), MAX_NAME_SIZE - 1);
+        save[savenum].count = it->second;
+        savenum++;
+    }
+    if (savenum > 0) {
+        flush_file(fd, (const char *) &save, sizeof(save));
+        memset(&save, sizeof(save), 0);
+        savenum = 0;
+    }
 }
 
-extern "C" int stop_cov(lua_State *L) {
+static void hook_handler(lua_State *L, lua_Debug *par) {
+    if (par->event != LUA_HOOKLINE) {
+        LERR("hook_handler diff event %d", par->event);
+        return;
+    }
+
+    lua_Debug ar;
+    ar.source = 0;
+    int ret = lua_getstack(L, 0, &ar);
+    if (ret == 0) {
+        LERR("hook_handler lua_getstack fail %d", ret);
+        return;
+    }
+
+    ret = lua_getinfo(L, "S", &ar);
+    if (ret == 0) {
+        LERR("hook_handler lua_getinfo fail %d", ret);
+        return;
+    }
+    if (ar.source == 0) {
+        LERR("hook_handler source nil ");
+        return;
+    }
+    if (ar.source[0] != '@') {
+        LLOG("hook_handler source error %s ", ar.source);
+        return;
+    }
+
+    char buff[MAX_NAME_SIZE] = {0};
+    snprintf(buff, sizeof(buff) - 1, "%s:%d", ar.source, par->currentline);
+
+    gdata[buff]++;
+
+    if (gautosave > 0) {
+        gcount++;
+        if (gcount % 10000 == 0) {
+            if (time(0) - glasttime > gautosave) {
+                glasttime = time(0);
+                LLOG("hook_handler %s %d", buff, gdata.size());
+                flush();
+            }
+        }
+    }
+}
+
+extern "C" void start_cov(lua_State *L) {
+    if (gdata.size() > 0) {
+        return;
+    }
+    gcount = 0;
+    glasttime = 0;
+    lua_sethook(L, hook_handler, LUA_MASKLINE, 0);
+}
+
+extern "C" void stop_cov(lua_State *L) {
     lua_sethook(L, 0, 0, 0);
-    return 0;
+    flush();
+    gdata.clear();
 }
 
 static int lstart(lua_State *L) {
     const char *file = lua_tostring(L, 1);
-    int ret = start_cov(L, file);
-    lua_pushinteger(L, ret);
-    return 1;
+    int autosave = (int) lua_tointeger(L, 2);
+    gfile = file;
+    gautosave = autosave;
+    start_cov(L);
+    return 0;
 }
 
 static int lstop(lua_State *L) {
