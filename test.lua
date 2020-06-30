@@ -1,33 +1,33 @@
 local cl = require "libclua"
 cl.start("test.cov", 5)
 
-function test1(i) then
-    if i % 2 then
-        print(i)
+function test1(i)
+    if i > 5 then
+        print("a "..i)
     else
-        print(i)
+        print("b "..i)
     end
 end
 
-function test2(i) then
+function test2(i)
     if i > 30 then
-        print(i)
+        print("c "..i)
     else
-        print(i)
+        print("d "..i)
     end
 end
 
-function test3(i) then
+function test3(i)
 
     if i > 0 then
-        print(i)
+        print("e "..i)
     else
-        print(i)
+        print("f "..i)
     end
 
 end
 
-for i = 0, 100 then
+for i = 0, 100 do
     if i < 10 then
         test1(i)
     elseif i < 50 then
