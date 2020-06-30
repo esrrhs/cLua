@@ -183,7 +183,7 @@ static int lstop(lua_State *L) {
     return 0;
 }
 
-extern "C" int luaopen_libluacov(lua_State *L) {
+extern "C" int luaopen_libclua(lua_State *L) {
     luaL_checkversion(L);
     luaL_Reg l[] = {
             {"start", lstart},
