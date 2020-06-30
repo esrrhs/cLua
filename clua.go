@@ -166,9 +166,7 @@ func calc(f FileData) {
 		fmt.Printf(" %s\n", strings.TrimRight(str, "\n"))
 
 		str = strings.TrimSpace(str)
-		if str == "" || str == "end" || str == "else" ||
-			strings.HasPrefix(str, "--") {
-		} else {
+		if str != "" {
 			valid++
 		}
 
