@@ -99,7 +99,7 @@ static void flush() {
         int len = it->first.length();
         flush_file(fd, (const char *) &len, sizeof(len));
         flush_file(fd, it->first.c_str(), len);
-        int count = it->second;
+        uint64_t count = it->second;
         flush_file(fd, (const char *) &count, sizeof(count));
     }
 
@@ -135,7 +135,7 @@ static void hook_handler(lua_State *L, lua_Debug *par) {
     }
 
     char buff[128] = {0};
-    snprintf(buff, sizeof(buff) - 1, "%llu", par->currentline);
+    snprintf(buff, sizeof(buff) - 1, "%d", par->currentline);
     std::string d = ar.source;
     d = d + ":";
     d = d + buff;
