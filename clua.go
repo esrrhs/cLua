@@ -42,13 +42,13 @@ func main() {
 	n := 0
 	i := 0
 	for {
-		if i+4 >= len(data) {
+		if i+4 > len(data) {
 			break
 		}
 		strlen := binary.LittleEndian.Uint32(data[i : i+4])
 		i += 4
 
-		if i+int(strlen) >= len(data) {
+		if i+int(strlen) > len(data) {
 			break
 		}
 		str := string(data[i : i+int(strlen)])
@@ -57,7 +57,7 @@ func main() {
 			break
 		}
 
-		if i+8 >= len(data) {
+		if i+8 > len(data) {
 			break
 		}
 		count := binary.LittleEndian.Uint64(data[i : i+8])

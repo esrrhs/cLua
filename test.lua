@@ -2,7 +2,7 @@ local cl = require "libclua"
 cl.start("test.cov", 5)
 
 function test1(i)
-    if i > 5 then
+    if i % 2 then
         print("a "..i)
     else
         print("b "..i)
