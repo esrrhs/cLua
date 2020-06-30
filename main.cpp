@@ -114,7 +114,7 @@ static void flush() {
         savenum++;
     }
     if (savenum > 0) {
-        flush_file(fd, (const char *) &save, sizeof(save));
+        flush_file(fd, (const char *) &save, sizeof(Save) * savenum);
         memset(&save, sizeof(save), 0);
         savenum = 0;
     }
