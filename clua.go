@@ -154,6 +154,7 @@ func calc(f FileData) {
 	reader := bufio.NewReader(file)
 
 	n := 1
+	valid := 0
 	for {
 		str, err := reader.ReadString('\n')
 		val, ok := f.line[n]
@@ -163,13 +164,21 @@ func calc(f FileData) {
 			fmt.Printf(fmt.Sprintf("%%-%d", pre)+"v", " ")
 		}
 		fmt.Printf(" %s\n", strings.TrimRight(str, "\n"))
+
+		str = strings.TrimSpace(str)
+		if str == "" || str == "end" || str == "else" ||
+			strings.HasPrefix(str, "--") {
+		} else {
+			valid++
+		}
+
 		n++
 		if err != nil {
 			break
 		}
 	}
 
-	fmt.Printf("%s total coverage %d%%\n", f.path, len(f.line)*100/n)
+	fmt.Printf("%s total coverage %d%%\n", f.path, len(f.line)*100/valid)
 }
 
 func fileExists(filename string) bool {
