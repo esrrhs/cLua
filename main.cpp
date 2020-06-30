@@ -77,7 +77,6 @@ void llog(const char *header, const char *file, const char *func, int pos, const
 std::unordered_map <std::string, uint64_t> gdata;
 int gcount;
 int glasttime;
-const int MAX_NAME_SIZE = 128;
 std::string gfile;
 int gautosave;
 
@@ -96,28 +95,15 @@ static void flush() {
         return;
     }
 
-    struct Save {
-        char name[MAX_NAME_SIZE];
-        uint64_t count;
-    };
-    const int MAX_SAVE_NUM = 1024;
-    Save save[MAX_SAVE_NUM];
-    int savenum = 0;
     for (std::unordered_map<std::string, uint64_t>::iterator it = gdata.begin(); it != gdata.end(); it++) {
-        if (savenum >= MAX_SAVE_NUM) {
-            flush_file(fd, (const char *) &save, sizeof(save));
-            memset(&save, sizeof(save), 0);
-            savenum = 0;
-        }
-        strncpy(save[savenum].name, it->first.c_str(), MAX_NAME_SIZE - 1);
-        save[savenum].count = it->second;
-        savenum++;
+        int len = it->first.length();
+        flush_file(fd, (const char *) &len, sizeof(len));
+        flush_file(fd, it->first.c_str(), len);
+        int count = it->second;
+        flush_file(fd, (const char *) &count, sizeof(count));
     }
-    if (savenum > 0) {
-        flush_file(fd, (const char *) &save, sizeof(Save) * savenum);
-        memset(&save, sizeof(save), 0);
-        savenum = 0;
-    }
+
+    close(fd);
 }
 
 static void hook_handler(lua_State *L, lua_Debug *par) {
@@ -148,17 +134,20 @@ static void hook_handler(lua_State *L, lua_Debug *par) {
         return;
     }
 
-    char buff[MAX_NAME_SIZE] = {0};
-    snprintf(buff, sizeof(buff) - 1, "%s:%d", ar.source, par->currentline);
+    char buff[128] = {0};
+    snprintf(buff, sizeof(buff) - 1, "%llu", par->currentline);
+    std::string d = ar.source;
+    d = d + ":";
+    d = d + buff;
 
-    gdata[buff]++;
+    gdata[d]++;
 
     if (gautosave > 0) {
         gcount++;
         if (gcount % 10000 == 0) {
             if (time(0) - glasttime > gautosave) {
                 glasttime = time(0);
-                LLOG("hook_handler %s %d", buff, gdata.size());
+                LLOG("hook_handler %s %d", d.c_str(), gdata.size());
                 flush();
             }
         }
