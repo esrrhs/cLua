@@ -22,7 +22,7 @@ func main() {
 
 	input := flag.String("i", "", "input cov file")
 	root := flag.String("path", "./", "source code path")
-	filter := flag.String("f", "", "filter filename")
+	filter := flag.String("f", "all", "filter filename")
 
 	flag.Parse()
 
