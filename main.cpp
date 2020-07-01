@@ -154,10 +154,12 @@ static void hook_handler(lua_State *L, lua_Debug *par) {
     }
 }
 
-extern "C" void start_cov(lua_State *L) {
+extern "C" void start_cov(lua_State *L, const char *file, int autosave) {
     if (gdata.size() > 0) {
         return;
     }
+    gfile = file;
+    gautosave = autosave;
     gcount = 0;
     glasttime = 0;
     lua_sethook(L, hook_handler, LUA_MASKLINE, 0);
@@ -172,9 +174,7 @@ extern "C" void stop_cov(lua_State *L) {
 static int lstart(lua_State *L) {
     const char *file = lua_tostring(L, 1);
     int autosave = (int) lua_tointeger(L, 2);
-    gfile = file;
-    gautosave = autosave;
-    start_cov(L);
+    start_cov(L, file, autosave);
     return 0;
 }
 
