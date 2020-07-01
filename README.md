@@ -110,4 +110,5 @@ coverage of /home/project/clua/test.lua:
 
 /home/project/clua/test.lua total coverage 60%
 ```
-* 最后一行输出文件的总体覆盖率，这个因为有else、end之类的影响，所以并不完全准确
+* 在结果中，可以看到每一行的执行次数，方便定位潜在bug
+* 最后一行会输出文件的总体覆盖率（注因为有else、end之类的影响，所以并不完全精确）
