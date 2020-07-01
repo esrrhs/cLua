@@ -42,10 +42,10 @@ a) 首先获取进程中的Lua_State指针，比如进程调用了lua_settop(L)�
 b) 加载libclua.so
 # ./hookso dlopen $PID ./libclua.so
 
-c) 执行libclua.so的start_cov手动开启
+c) 执行libclua.so的start_cov手动开启，等价于start_cov(L, "./test.cov", 5)
 # ./hookso call $PID libclua.so start_cov i=123456 s="./test.cov" i=5
 
-c) 执行libclua.so的stop_cov手动关闭
+c) 执行libclua.so的stop_cov手动关闭，等价于stop_cov(L)
 # ./hookso call $PID libclua.so stop_cov i=123456
 ```
 * 执行完上述两种方法的任一一种，用clua解析test.cov查看结果。clua更多参数参考-h
