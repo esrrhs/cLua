@@ -35,17 +35,17 @@ cl.stop()
 ```
 * 或者使用[hookso](https://github.com/esrrhs/hookso)注入到进程中（假设进程id为PID），手动开启
 ```
-a)首先获取进程中的Lua_State指针，比如进程调用了lua_settop(L)函数，那么就取第一个参数
+a) 首先获取进程中的Lua_State指针，比如进程调用了lua_settop(L)函数，那么就取第一个参数
 # ./hookso arg $PID liblua.so lua_settop 1 
 123456
 
-b)加载libclua.so
+b) 加载libclua.so
 # ./hookso dlopen $PID ./libclua.so
 
-c)执行libclua.so的start_cov手动开启
+c) 执行libclua.so的start_cov手动开启
 # ./hookso call $PID libclua.so start_cov i=123456 s="./test.cov" i=5
 
-c)执行libclua.so的stop_cov手动关闭
+c) 执行libclua.so的stop_cov手动关闭
 # ./hookso call $PID libclua.so stop_cov i=123456
 ```
 * 执行完上述两种方法的任一一种，用clua解析test.cov查看结果。clua更多参数参考-h
