@@ -1,4 +1,8 @@
 # cLua
+[<img src="https://img.shields.io/github/license/esrrhs/cLua">](https://github.com/esrrhs/cLua)
+[<img src="https://img.shields.io/github/languages/top/esrrhs/cLua">](https://github.com/esrrhs/cLua)
+[<img src="https://img.shields.io/github/workflow/status/esrrhs/cLua/CI">](https://github.com/esrrhs/cLua/actions)
+
 lua的代码覆盖率工具
 
 # 特性
