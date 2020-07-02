@@ -118,4 +118,4 @@ coverage of /home/project/clua/test.lua:
 * 最后一行会输出文件的总体覆盖率（注：因为有else、end之类的影响，所以并不完全精确）
 
 ## 其他
-lua的性能分析工具[pLua](https://github.com/esrrhs/plua)
+lua的性能分析工具[pLua](https://github.com/esrrhs/pLua)
