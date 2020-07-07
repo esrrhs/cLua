@@ -8,7 +8,7 @@ lua的代码覆盖率工具
 # 特性
 * C++开发，性能更高，对宿主进程影响更小
 * 简单require即可使用，或通过[hookso](https://github.com/esrrhs/hookso)注入
-* 通过解析lua语法，精确计算覆盖率
+* 通过解析lua语法，精确计算文件及函数的覆盖率
 
 # 编译
 * 编译libclua.so
@@ -69,7 +69,7 @@ c) 执行libclua.so的stop_cov手动关闭，等价于stop_cov(L)
 * 查看结果，每行前面的数字表示执行的次数，空表示没被执行
 ```
 # ./clua -i test.cov     
-total points = 20, files = 1
+total points = 27, files = 1
 coverage of /home/project/clua/test.lua:
     local cl = require "libclua"
     cl.start("test.cov", 5)
@@ -100,6 +100,18 @@ coverage of /home/project/clua/test.lua:
     
 52  end
     
+    test4 = function(i)
+    
+        local function test5(i)
+12          print("g "..i)
+15      end
+    
+15      for i = 0, 3 do
+12          test5(i)
+        end
+    
+4   end
+    
 102 for i = 0, 100 do
 101     if i < 10 then
 10          test1(i)
@@ -110,11 +122,21 @@ coverage of /home/project/clua/test.lua:
         end
     end
     
+4   for i = 0, 2 do
+3       test4(i)
+    end
+    
 1   cl.stop()
-
-/home/project/clua/test.lua total coverage 60%
+    
+/home/project/clua/test.lua total coverage 78% 22/28
+/home/project/clua/test.lua function coverage [function test1(i)] 66% 2/3
+/home/project/clua/test.lua function coverage [function test2(i)] 100% 3/3
+/home/project/clua/test.lua function coverage [function test3(i)] 66% 2/3
+/home/project/clua/test.lua function coverage [test4 = function(i)] 75% 3/4
+/home/project/clua/test.lua function coverage [local function test5(i)] 100% 1/1
 ```
 * 在结果中，可以看到每一行的执行次数，方便定位潜在bug
+* 最后几行显示了总体覆盖率，以及每个函数的覆盖率
 
 ## 其他
 lua的性能分析工具[pLua](https://github.com/esrrhs/pLua)
