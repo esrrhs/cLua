@@ -8,7 +8,7 @@ lua的代码覆盖率工具
 # 特性
 * C++开发，性能更高，对宿主进程影响更小
 * 简单require即可使用，或通过[hookso](https://github.com/esrrhs/hookso)注入
-* 独立的命令行解析工具
+* 通过解析lua语法，精确计算覆盖率
 
 # 编译
 * 编译libclua.so
@@ -115,7 +115,6 @@ coverage of /home/project/clua/test.lua:
 /home/project/clua/test.lua total coverage 60%
 ```
 * 在结果中，可以看到每一行的执行次数，方便定位潜在bug
-* 最后一行会输出文件的总体覆盖率（注：因为有else、end之类的影响，所以并不完全精确）
 
 ## 其他
 lua的性能分析工具[pLua](https://github.com/esrrhs/pLua)
