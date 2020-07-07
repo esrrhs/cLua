@@ -169,8 +169,12 @@ type luaVisitor struct {
 }
 
 func (lv *luaVisitor) Visit(n ast.Node) ast.Visitor {
-	lv.f(n)
-	return lv
+	if n != nil {
+		lv.f(n)
+		return lv
+	} else {
+		return nil
+	}
 }
 
 func calc(f FileData, showcode bool, showtotal bool, showfunc bool) {
@@ -180,16 +184,14 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool) {
 		return
 	}
 
-	block, ok := parseLua(f.path)
+	block, ok := parseLua(filecontent)
 	if !ok {
 		return
 	}
 
 	validline := make(map[int]int)
 	v := luaVisitor{f: func(n ast.Node) {
-		if n != nil {
-			validline[n.Line()]++
-		}
+		validline[n.Line()]++
 	}}
 	for _, stmt := range block {
 		ast.Walk(&v, stmt)
@@ -232,7 +234,11 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool) {
 				}
 			}
 		}
-		fmt.Printf("%s total coverage %d%% %d/%d\n", f.path, valid*100/len(validline), valid, len(validline))
+		if len(validline) != 0 {
+			fmt.Printf("%s total coverage %d%% %d/%d\n", f.path, valid*100/len(validline), valid, len(validline))
+		} else {
+			fmt.Printf("%s total coverage %d%% %d/%d\n", f.path, 0, valid, 0)
+		}
 	}
 
 	if showfunc {
@@ -258,11 +264,9 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool) {
 			funcmaxline := 0
 			funcvalidline := make(map[int]int)
 			fv := luaVisitor{f: func(n ast.Node) {
-				if n != nil {
-					funcvalidline[n.Line()]++
-					if n.Line() > funcmaxline {
-						funcmaxline = n.Line()
-					}
+				funcvalidline[n.Line()]++
+				if n.Line() > funcmaxline {
+					funcmaxline = n.Line()
 				}
 			}}
 			for _, stmt := range funcdec.Block {
@@ -280,7 +284,11 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool) {
 				}
 			}
 
-			fmt.Printf("%s function coverage %s %d%% %d/%d\n", f.path, funcname, valid*100/len(funcvalidline), valid, len(funcvalidline))
+			if len(funcvalidline) != 0 {
+				fmt.Printf("%s function coverage %s %d%% %d/%d\n", f.path, funcname, valid*100/len(funcvalidline), valid, len(funcvalidline))
+			} else {
+				fmt.Printf("%s function coverage %s %d%% %d/%d\n", f.path, funcname, 0, valid, 0)
+			}
 		}
 	}
 }
@@ -293,19 +301,14 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
-func parseLua(filename string) ([]ast.Stmt, bool) {
+func parseLua(filecontent []string) ([]ast.Stmt, bool) {
 
-	file, err := os.Open(filename)
-	if err != nil {
-		fmt.Printf("Open File Fail %v\n", err)
-		return nil, false
-	}
-	defer file.Close()
-
-	source, err := ioutil.ReadAll(file)
-	if err != nil {
-		fmt.Printf("ReadAll File Fail %v\n", err)
-		return nil, false
+	source := ""
+	for _, str := range filecontent {
+		if strings.HasPrefix(str, "#!") {
+			str = "\n"
+		}
+		source += str
 	}
 
 	block, err := ast.Parse(string(source), 1)
