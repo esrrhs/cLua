@@ -1,4 +1,8 @@
 # cLua
+[<img src="https://img.shields.io/github/license/esrrhs/cLua">](https://github.com/esrrhs/cLua)
+[<img src="https://img.shields.io/github/languages/top/esrrhs/cLua">](https://github.com/esrrhs/cLua)
+[<img src="https://img.shields.io/github/workflow/status/esrrhs/cLua/Go">](https://github.com/esrrhs/cLua/actions)
+
 lua的代码覆盖率工具
 
 # 特性
@@ -18,7 +22,7 @@ lua的代码覆盖率工具
 ```
 
 # 使用
-* lua文件里使用如下
+* 直接嵌入lua脚本中使用，lua文件里使用如下
 ```
 -- 加载libclua.so
 local cl = require "libclua"
@@ -33,7 +37,22 @@ do_something()
 -- 结束记录
 cl.stop()
 ```
-* 然后用clua解析结果，clua更多参数参考-h
+* 或者使用[hookso](https://github.com/esrrhs/hookso)注入到进程中（假设进程id为PID），手动开启
+```
+a) 首先获取进程中的Lua_State指针，比如进程调用了lua_settop(L)函数，那么就取第一个参数
+# ./hookso arg $PID liblua.so lua_settop 1 
+123456
+
+b) 加载libclua.so
+# ./hookso dlopen $PID ./libclua.so
+
+c) 执行libclua.so的start_cov手动开启，等价于start_cov(L, "./test.cov", 5)
+# ./hookso call $PID libclua.so start_cov i=123456 s="./test.cov" i=5
+
+c) 执行libclua.so的stop_cov手动关闭，等价于stop_cov(L)
+# ./hookso call $PID libclua.so stop_cov i=123456
+```
+* 执行完上述两种方法的任一一种，用clua解析test.cov查看结果。clua更多参数参考-h
 ```
 # ./clua -i test.cov
 ```
@@ -95,4 +114,8 @@ coverage of /home/project/clua/test.lua:
 
 /home/project/clua/test.lua total coverage 60%
 ```
-* 最后一行输出文件的总体覆盖率，这个因为有else、end之类的影响，所以并不完全准确
+* 在结果中，可以看到每一行的执行次数，方便定位潜在bug
+* 最后一行会输出文件的总体覆盖率（注：因为有else、end之类的影响，所以并不完全精确）
+
+## 其他
+lua的性能分析工具[pLua](https://github.com/esrrhs/pLua)
