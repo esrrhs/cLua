@@ -23,4 +23,6 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Build
-      run: go build clua.go
+      run: |
+        go get "github.com/milochristiansen/lua/ast" 
+        go build clua.go
