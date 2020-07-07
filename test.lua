@@ -27,6 +27,18 @@ function test3(i)
 
 end
 
+test4 = function(i)
+
+    local function test5(i)
+        print("g "..i)
+    end
+
+    for i = 0, 3 do
+        test5(i)
+    end
+
+end
+
 for i = 0, 100 do
     if i < 10 then
         test1(i)
@@ -35,6 +47,10 @@ for i = 0, 100 do
     else
         test3(i)
     end
+end
+
+for i = 0, 2 do
+    test4(i)
 end
 
 cl.stop()

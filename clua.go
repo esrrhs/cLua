@@ -175,8 +175,6 @@ func (lv *luaVisitor) Visit(n ast.Node) ast.Visitor {
 
 func calc(f FileData, showcode bool, showtotal bool, showfunc bool) {
 
-	fmt.Printf("coverage of %s:\n", f.path)
-
 	filecontent, ok := readfile(f.path)
 	if !ok {
 		return
@@ -198,6 +196,8 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool) {
 	}
 
 	if showcode {
+		fmt.Printf("coverage of %s:\n", f.path)
+
 		maxpre := uint64(0)
 		for _, c := range f.line {
 			if c > maxpre {
@@ -233,6 +233,55 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool) {
 			}
 		}
 		fmt.Printf("%s total coverage %d%% %d/%d\n", f.path, valid*100/len(validline), valid, len(validline))
+	}
+
+	if showfunc {
+		var funcdecs []*ast.FuncDecl
+		v := luaVisitor{f: func(n ast.Node) {
+			if n != nil {
+				switch nn := n.(type) {
+				case *ast.FuncDecl:
+					funcdecs = append(funcdecs, nn)
+				}
+			}
+		}}
+		for _, stmt := range block {
+			ast.Walk(&v, stmt)
+		}
+
+		for _, funcdec := range funcdecs {
+			line := funcdec.Line()
+			funcname := filecontent[line-1]
+			funcname = strings.TrimSpace(funcname)
+			funcname = "[" + funcname + "]"
+
+			funcmaxline := 0
+			funcvalidline := make(map[int]int)
+			fv := luaVisitor{f: func(n ast.Node) {
+				if n != nil {
+					funcvalidline[n.Line()]++
+					if n.Line() > funcmaxline {
+						funcmaxline = n.Line()
+					}
+				}
+			}}
+			for _, stmt := range funcdec.Block {
+				ast.Walk(&fv, stmt)
+			}
+
+			valid := 0
+			for i := line; i <= funcmaxline; i++ {
+				_, ok := f.line[i]
+				if ok {
+					_, ok = funcvalidline[i]
+					if ok {
+						valid++
+					}
+				}
+			}
+
+			fmt.Printf("%s function coverage %s %d%% %d/%d\n", f.path, funcname, valid*100/len(funcvalidline), valid, len(funcvalidline))
+		}
 	}
 }
 
