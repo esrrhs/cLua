@@ -18,6 +18,7 @@ lua的代码覆盖率工具
 ```
 * 编译clua解析工具
 ```
+# go get "github.com/milochristiansen/lua" 
 # go build clua.go
 ```
 
