@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"github.com/milochristiansen/lua/ast"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -23,6 +24,9 @@ func main() {
 	input := flag.String("i", "", "input cov file")
 	root := flag.String("path", "./", "source code path")
 	filter := flag.String("f", "", "filter filename")
+	showcode := flag.Bool("showcode", true, "show code")
+	showtotal := flag.Bool("showtotal", true, "show total")
+	showfunc := flag.Bool("showfunc", true, "show func")
 
 	flag.Parse()
 
@@ -31,11 +35,30 @@ func main() {
 		return
 	}
 
-	filename := *input
+	filedata, ok := parse(*input, *root)
+	if !ok {
+		return
+	}
+
+	if len(*filter) != 0 {
+		for _, p := range filedata {
+			if p.file == *filter {
+				calc(p, *showcode, *showtotal, *showfunc)
+			}
+		}
+	} else {
+		for _, p := range filedata {
+			calc(p, *showcode, *showtotal, *showfunc)
+		}
+	}
+}
+
+func parse(filename string, root string) ([]FileData, bool) {
+
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		fmt.Printf("ReadFile fail %v\n", err)
-		return
+		return nil, false
 	}
 
 	var filedata []FileData
@@ -70,24 +93,24 @@ func main() {
 		params := strings.Split(str, ":")
 		if len(params) < 2 {
 			fmt.Printf("Split fail %s\n", str)
-			return
+			return nil, false
 		}
 		filename := params[0]
 		line, err := strconv.Atoi(params[1])
 		if err != nil {
 			fmt.Printf("Atoi fail  %s %v\n", str, err)
-			return
+			return nil, false
 		}
 
-		path, err := filepath.Abs(*root + "/" + filename)
+		path, err := filepath.Abs(root + "/" + filename)
 		if err != nil {
-			fmt.Printf("Path fail %s %s %v\n", *root, str, err)
-			return
+			fmt.Printf("Path fail %s %s %v\n", root, str, err)
+			return nil, false
 		}
 
 		if !fileExists(path) {
 			fmt.Printf("File not found %s\n", path)
-			return
+			return nil, false
 		}
 
 		file := filepath.Base(path)
@@ -113,70 +136,104 @@ func main() {
 
 	fmt.Printf("total points = %d, files = %d\n", n, len(filedata))
 
-	if len(*filter) != 0 {
-		for _, p := range filedata {
-			if p.file == *filter {
-				calc(p)
-			}
-		}
-	} else {
-		for _, p := range filedata {
-			calc(p)
-		}
-	}
+	return filedata, true
 }
 
-func calc(f FileData) {
+func readfile(filename string) ([]string, bool) {
 
-	fmt.Printf("coverage of %s:\n", f.path)
+	var filecontent []string
 
-	file, err := os.Open(f.path)
-	defer file.Close()
-
+	file, err := os.Open(filename)
 	if err != nil {
 		fmt.Printf("Open File Fail %v\n", err)
-		return
+		return filecontent, false
 	}
-
-	maxpre := uint64(0)
-	for _, c := range f.line {
-		if c > maxpre {
-			maxpre = c
-		}
-	}
-	pre := 0
-	for maxpre > 0 {
-		maxpre /= 10
-		pre++
-	}
+	defer file.Close()
 
 	// Start reading from the file with a reader.
 	reader := bufio.NewReader(file)
 
-	n := 1
-	valid := 0
 	for {
 		str, err := reader.ReadString('\n')
-		val, ok := f.line[n]
-		if ok {
-			fmt.Printf(fmt.Sprintf("%%-%d", pre)+"v", val)
-		} else {
-			fmt.Printf(fmt.Sprintf("%%-%d", pre)+"v", " ")
-		}
-		fmt.Printf(" %s\n", strings.TrimRight(str, "\n"))
-
-		str = strings.TrimSpace(str)
-		if str != "" {
-			valid++
-		}
-
-		n++
+		filecontent = append(filecontent, str)
 		if err != nil {
 			break
 		}
 	}
 
-	fmt.Printf("%s total coverage %d%%\n", f.path, len(f.line)*100/valid)
+	return filecontent, true
+}
+
+type luaVisitor struct {
+	f func(n ast.Node)
+}
+
+func (lv *luaVisitor) Visit(n ast.Node) ast.Visitor {
+	lv.f(n)
+	return lv
+}
+
+func calc(f FileData, showcode bool, showtotal bool, showfunc bool) {
+
+	fmt.Printf("coverage of %s:\n", f.path)
+
+	filecontent, ok := readfile(f.path)
+	if !ok {
+		return
+	}
+
+	block, ok := parseLua(f.path)
+	if !ok {
+		return
+	}
+
+	validline := make(map[int]int)
+	v := luaVisitor{f: func(n ast.Node) {
+		if n != nil {
+			validline[n.Line()]++
+		}
+	}}
+	for _, stmt := range block {
+		ast.Walk(&v, stmt)
+	}
+
+	if showcode {
+		maxpre := uint64(0)
+		for _, c := range f.line {
+			if c > maxpre {
+				maxpre = c
+			}
+		}
+		pre := 0
+		for maxpre > 0 {
+			maxpre /= 10
+			pre++
+		}
+
+		for index, str := range filecontent {
+			val, ok := f.line[index+1]
+			if ok {
+				fmt.Printf(fmt.Sprintf("%%-%d", pre)+"v", val)
+			} else {
+				fmt.Printf(fmt.Sprintf("%%-%d", pre)+"v", " ")
+			}
+			fmt.Printf(" %s\n", strings.TrimRight(str, "\n"))
+		}
+	}
+
+	if showtotal {
+		valid := 0
+		for index, _ := range filecontent {
+			_, ok := f.line[index+1]
+			if ok {
+				_, ok = validline[index+1]
+				if ok {
+					valid++
+				}
+			}
+		}
+		fmt.Printf("%s total coverage %d%% %d/%d\n", f.path, valid*100/len(validline), valid, len(validline))
+	}
 }
 
 func fileExists(filename string) bool {
@@ -185,4 +242,28 @@ func fileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+func parseLua(filename string) ([]ast.Stmt, bool) {
+
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Printf("Open File Fail %v\n", err)
+		return nil, false
+	}
+	defer file.Close()
+
+	source, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Printf("ReadAll File Fail %v\n", err)
+		return nil, false
+	}
+
+	block, err := ast.Parse(string(source), 1)
+	if err != nil {
+		fmt.Printf("Parse File Fail %v\n", err)
+		return nil, false
+	}
+
+	return block, true
 }
