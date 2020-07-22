@@ -315,7 +315,7 @@ func do_showfunc(f FileData, filecontent []string, block []ast.Stmt) {
 	}
 }
 
-func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, lcovfd *os.File) {
+func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, validline map[int]int, lcovfd *os.File) {
 
 	lcovfd.WriteString(fmt.Sprintf("SF:%s\n", f.path))
 
@@ -388,8 +388,6 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, lcovfd *os.
 	lcovfd.WriteString(fmt.Sprintf("FNF:%d\n", funcfound))
 	lcovfd.WriteString(fmt.Sprintf("FNH:%d\n", funchit))
 
-	linefound := 0
-	linehit := 0
 	for _, funcdec := range funcdecs {
 		line := funcdec.Line()
 
@@ -408,10 +406,7 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, lcovfd *os.
 		for i := line; i <= funcmaxline; i++ {
 			_, ok := funcvalidline[i]
 			if ok {
-				value, ok := f.line[i]
-				if ok {
-					linehit++
-				}
+				value, _ := f.line[i]
 				srcstr := filecontent[i-1]
 				srcstr = strings.TrimRight(srcstr, "\r\n")
 				srcstr = strings.TrimRight(srcstr, "\n")
@@ -423,11 +418,21 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, lcovfd *os.
 				md5str = strings.Replace(md5str, "-", "+", -1)
 				lcovfd.WriteString(fmt.Sprintf("DA:%d,%d,%s\n", i, value, md5str))
 			}
-			linefound++
 		}
 	}
 
-	lcovfd.WriteString(fmt.Sprintf("LF:%d\n", linefound))
+	linehit := 0
+	for index, _ := range filecontent {
+		_, ok := f.line[index+1]
+		if ok {
+			_, ok = validline[index+1]
+			if ok {
+				linehit++
+			}
+		}
+	}
+
+	lcovfd.WriteString(fmt.Sprintf("LF:%d\n", len(validline)))
 	lcovfd.WriteString(fmt.Sprintf("LH:%d\n", linehit))
 
 	lcovfd.WriteString("end_of_record\n")
@@ -463,6 +468,14 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool, lcovfd *os.F
 		return
 	}
 
+	validline := make(map[int]int)
+	v := luaVisitor{f: func(n ast.Node) {
+		validline[n.Line()]++
+	}}
+	for _, stmt := range block {
+		ast.Walk(&v, stmt)
+	}
+
 	if showcode {
 		do_showcode(f, filecontent)
 	}
@@ -476,7 +489,7 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool, lcovfd *os.F
 	}
 
 	if lcovfd != nil {
-		do_lcovfile(f, filecontent, block, lcovfd)
+		do_lcovfile(f, filecontent, block, validline, lcovfd)
 	}
 }
 
