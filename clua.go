@@ -214,53 +214,21 @@ func do_showcode(f FileData, filecontent []string) {
 	}
 }
 
-func do_showtotal(f FileData, filecontent []string, block []ast.Stmt) {
-	var funcdecs []*ast.FuncDecl
-	v := luaVisitor{f: func(n ast.Node) {
-		if n != nil {
-			switch nn := n.(type) {
-			case *ast.FuncDecl:
-				funcdecs = append(funcdecs, nn)
-			}
-		}
-	}}
-	for _, stmt := range block {
-		ast.Walk(&v, stmt)
-	}
-
-	linefound := 0
-	linehit := 0
-	for _, funcdec := range funcdecs {
-		line := funcdec.Line()
-
-		funcmaxline := 0
-		funcvalidline := make(map[int]int)
-		fv := luaVisitor{f: func(n ast.Node) {
-			funcvalidline[n.Line()]++
-			if n.Line() > funcmaxline {
-				funcmaxline = n.Line()
-			}
-		}}
-		for _, stmt := range funcdec.Block {
-			ast.Walk(&fv, stmt)
-		}
-
-		for i := line; i <= funcmaxline; i++ {
-			_, ok := f.line[i]
+func do_showtotal(f FileData, filecontent []string, validline map[int]int) {
+	valid := 0
+	for index, _ := range filecontent {
+		_, ok := f.line[index+1]
+		if ok {
+			_, ok = validline[index+1]
 			if ok {
-				_, ok = funcvalidline[i]
-				if ok {
-					linehit++
-				}
+				valid++
 			}
-			linefound++
 		}
 	}
-
-	if linehit != 0 {
-		fmt.Printf("%s total coverage %d%% %d/%d\n", f.path, linehit*100/linefound, linehit, linefound)
+	if len(validline) != 0 {
+		fmt.Printf("%s total coverage %d%% %d/%d\n", f.path, valid*100/len(validline), valid, len(validline))
 	} else {
-		fmt.Printf("%s total coverage %d%% %d/%d\n", f.path, 0, linehit, 0)
+		fmt.Printf("%s total coverage %d%% %d/%d\n", f.path, 0, valid, 0)
 	}
 }
 
@@ -481,7 +449,7 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool, lcovfd *os.F
 	}
 
 	if showtotal {
-		do_showtotal(f, filecontent, block)
+		do_showtotal(f, filecontent, validline)
 	}
 
 	if showfunc {
