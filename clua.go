@@ -417,6 +417,7 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, lcovfd *os.
 					h.Write([]byte(srcstr))
 					md5str := base64.URLEncoding.EncodeToString(h.Sum(nil))
 					md5str = strings.TrimRight(md5str, "==")
+					md5str = strings.Replace(md5str, "_", "/", -1)
 					lcovfd.WriteString(fmt.Sprintf("DA:%d,%d,%s\n", i, value, md5str))
 					linehit++
 				}
