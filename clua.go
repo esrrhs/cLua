@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"github.com/milochristiansen/lua/ast"
@@ -412,7 +412,8 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, lcovfd *os.
 				if ok {
 					h := md5.New()
 					h.Write([]byte(filecontent[i]))
-					md5str := hex.EncodeToString(h.Sum(nil))
+					md5str := base64.URLEncoding.EncodeToString(h.Sum(nil))
+					md5str = strings.TrimRight(md5str, "==")
 					lcovfd.WriteString(fmt.Sprintf("DA:%d,%d,%s\n", i, value, md5str))
 					linehit++
 				}
