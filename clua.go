@@ -410,20 +410,21 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, lcovfd *os.
 			if ok {
 				_, ok = funcvalidline[i]
 				if ok {
-					srcstr := filecontent[i-1]
-					srcstr = strings.TrimRight(srcstr, "\r\n")
-					srcstr = strings.TrimRight(srcstr, "\n")
-					h := md5.New()
-					h.Write([]byte(srcstr))
-					md5str := base64.URLEncoding.EncodeToString(h.Sum(nil))
-					md5str = strings.TrimRight(md5str, "==")
-					md5str = strings.Replace(md5str, "_", "/", -1)
-					md5str = strings.Replace(md5str, "-", "+", -1)
-					lcovfd.WriteString(fmt.Sprintf("DA:%d,%d,%s\n", i, value, md5str))
 					linehit++
 				}
 			}
 			linefound++
+
+			srcstr := filecontent[i-1]
+			srcstr = strings.TrimRight(srcstr, "\r\n")
+			srcstr = strings.TrimRight(srcstr, "\n")
+			h := md5.New()
+			h.Write([]byte(srcstr))
+			md5str := base64.URLEncoding.EncodeToString(h.Sum(nil))
+			md5str = strings.TrimRight(md5str, "==")
+			md5str = strings.Replace(md5str, "_", "/", -1)
+			md5str = strings.Replace(md5str, "-", "+", -1)
+			lcovfd.WriteString(fmt.Sprintf("DA:%d,%d,%s\n", i, value, md5str))
 		}
 	}
 
