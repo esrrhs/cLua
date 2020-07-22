@@ -427,8 +427,8 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, lcovfd *os.
 		}
 	}
 
-	lcovfd.WriteString(fmt.Sprintf("LH:%d\n", linehit))
 	lcovfd.WriteString(fmt.Sprintf("LF:%d\n", linefound))
+	lcovfd.WriteString(fmt.Sprintf("LH:%d\n", linehit))
 
 	lcovfd.WriteString("end_of_record\n")
 }
