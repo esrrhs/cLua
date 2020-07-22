@@ -9,6 +9,7 @@ lua的代码覆盖率工具
 * 数据采集用C++编写，性能更高，对宿主进程影响更小
 * 简单require即可使用，或通过[hookso](https://github.com/esrrhs/hookso)注入
 * 解析器用go编写，通过解析lua语法，精确计算文件及函数的覆盖率
+* 支持输出[lcov](http://ltp.sourceforge.net/coverage/lcov.php)格式，进而输出html结果
 
 # 编译
 * 编译libclua.so
@@ -67,7 +68,7 @@ c) 执行libclua.so的stop_cov手动关闭，等价于stop_cov(L)
 ```
 # ll test.cov
 ```
-* 查看结果，每行前面的数字表示执行的次数，空表示没被执行
+* 查看结果，每行前面的数字表示执行的次数，空表示没被执行，方便定位潜在bug。最后几行显示了总体覆盖率，以及每个函数的覆盖率
 ```
 # ./clua -i test.cov     
 total points = 27, files = 1
@@ -136,8 +137,19 @@ coverage of /home/project/clua/test.lua:
 /home/project/clua/test.lua function coverage [test4 = function(i)] 75% 3/4
 /home/project/clua/test.lua function coverage [local function test5(i)] 100% 1/1
 ```
-* 在结果中，可以看到每一行的执行次数，方便定位潜在bug
-* 最后几行显示了总体覆盖率，以及每个函数的覆盖率
+* 也用lcov查看
+```
+# ./clua -i test.cov -lcov test.info    
+```
+* 此时目录下已有```test.info```文件，然后用lcov的工具输出html
+```
+# genhtml test.info 
+```
+* 打开目录下的index.html如下
+![image](./lcov1.png)
+* 点击进入test.lua
+![image](./lcov2.png)
+* lcov还可以对info文件进行合并，更多操作参考官方文档
 
 ## 其他
 lua的性能分析工具[pLua](https://github.com/esrrhs/pLua)
