@@ -410,7 +410,7 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, lcovfd *os.
 			if ok {
 				_, ok = funcvalidline[i]
 				if ok {
-					srcstr := filecontent[i]
+					srcstr := filecontent[i-1]
 					srcstr = strings.TrimRight(srcstr, "\r\n")
 					srcstr = strings.TrimRight(srcstr, "\n")
 					h := md5.New()
