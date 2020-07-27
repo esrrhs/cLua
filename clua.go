@@ -29,6 +29,7 @@ func main() {
 	showcode := flag.Bool("showcode", true, "show code")
 	showtotal := flag.Bool("showtotal", true, "show total")
 	showfunc := flag.Bool("showfunc", true, "show func")
+	showfile := flag.Bool("showfile", false, "show file")
 	lcovfile := flag.String("lcov", "", "output lcov info")
 
 	flag.Parse()
@@ -41,6 +42,12 @@ func main() {
 	filedata, ok := parse(*input, *root)
 	if !ok {
 		return
+	}
+
+	if *showfile {
+		for _, p := range filedata {
+			fmt.Println(p.path)
+		}
 	}
 
 	err, lcovfd := check_lcovfile_begin(*lcovfile)
@@ -145,7 +152,7 @@ func parse(filename string, root string) ([]FileData, bool) {
 		n++
 	}
 
-	fmt.Printf("total points = %d, files = %d\n", n, len(filedata))
+	//fmt.Printf("total points = %d, files = %d\n", n, len(filedata))
 
 	return filedata, true
 }
