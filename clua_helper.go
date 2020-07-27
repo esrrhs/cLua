@@ -30,6 +30,7 @@ var covpath = flag.String("covpath", "./cov", "saved coverage path")
 var covinter = flag.Int("covinter", 5, "saved coverage inter")
 var server = flag.String("server", "http://127.0.0.1:8877", "send to server host")
 var port = flag.Int("port", 8877, "server listen port")
+var getluastate = flag.String("getluastate", "test.so lua_settop 1", "get lua state command")
 
 func main() {
 
@@ -91,8 +92,8 @@ func load_pids() ([]int, error) {
 
 func get_lstate(pid int) (string, error) {
 
-	// ./hookso arg $PID libluna.so lua_settop 1
-	cmd := exec.Command("bash", "-c", *hookso+" arg "+strconv.Itoa(pid)+" libluna.so lua_settop 1")
+	// ./hookso arg $PID test.so lua_settop 1
+	cmd := exec.Command("bash", "-c", *hookso+" arg "+strconv.Itoa(pid)+" "+*getluastate)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		loggo.Error("exec Command failed with %s", err)
@@ -169,7 +170,7 @@ func start_inject(pid int) error {
 		return err
 	}
 
-	// ./hookso call $PID libclua.so start_cov i=$L s="../tools/luacoverage/$NAME$i.cov" i=5
+	// ./hookso call $PID libclua.so start_cov i=$L s="dst.cov" i=5
 	cmd := exec.Command("bash", "-c", *hookso+" call "+strconv.Itoa(pid)+" "+*libclua+" start_cov i="+lstatestr+
 		" s=\""+dstfile+"\" i="+strconv.Itoa(*covinter))
 	_, err = cmd.CombinedOutput()
