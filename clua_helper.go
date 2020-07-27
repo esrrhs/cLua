@@ -26,6 +26,7 @@ var skiproot = flag.String("skippath", "tables", "skip path")
 var binname = flag.String("bin", "main", "binary name")
 var hookso = flag.String("hookso", "./hookso", "hookso path")
 var libclua = flag.String("libclua", "./libclua.so", "libclua.so path")
+var clua = flag.String("clua", "./clua", "clua path")
 var covpath = flag.String("covpath", "./cov", "saved coverage path")
 var covinter = flag.Int("covinter", 5, "saved coverage inter")
 var server = flag.String("server", "http://127.0.0.1:8877", "send to server host")
@@ -262,30 +263,67 @@ func reset_client() (map[string]SouceData, []int, error) {
 	return cursource, pids, nil
 }
 
-func backup_cov(pids []int) ([][]byte, error) {
+func get_cov_source_file(path string) ([]string, error) {
+
+	// ./clua -path /home/project/iGame/trunk/bin/ -i cov/4157.cov -showfunc=false -showtotal=false -showcode=false -showfile=true
+	cmd := exec.Command("bash", "-c", *clua+" -path "+*root+" -i "+path+" -showfunc=false -showtotal=false -showcode=false -showfile=true")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		loggo.Error("exec Command failed with %s", err)
+		return nil, err
+	}
+	var ret []string
+	filestrs := strings.Split(string(out), "\n")
+	for _, filestr := range filestrs {
+		ret = append(ret, filestr)
+	}
+	return ret, nil
+}
+
+func backup_cov(pids []int) ([][]byte, map[string]int, error) {
 	var ret [][]byte
+	retsourcefile := make(map[string]int)
 	for _, pid := range pids {
 		src, err := get_pid_cov_file(pid)
 		if err != nil {
 			loggo.Error("get_pid_cov_file failed %s", err)
-			return nil, err
+			return nil, nil, err
 		}
 
 		data, err := ioutil.ReadFile(src)
 		if err != nil {
 			loggo.Error("ioutil ReadFile fail %q: %v", src, err)
-			return nil, err
+			return nil, nil, err
 		}
 
 		ret = append(ret, data)
+
+		sourcefiles, err := get_cov_source_file(src)
+		if err != nil {
+			loggo.Error("get_cov_source_file fail %q: %v", src, err)
+			return nil, nil, err
+		}
+
+		for _, sourcefile := range sourcefiles {
+			retsourcefile[filepath.Clean(sourcefile)]++
+		}
 	}
-	return ret, nil
+	return ret, retsourcefile, nil
 }
 
-func send_to_server(covdata [][]byte, source map[string]SouceData) error {
-	loggo.Info("start send_to_server %d %d", len(covdata), len(source))
+func send_to_server(covdata [][]byte, covsource map[string]int, source map[string]SouceData) error {
 
-	pushdata := PushData{covdata, source}
+	tmpsource := make(map[string]SouceData)
+	for k, v := range source {
+		_, ok := covsource[filepath.Clean(k)]
+		if ok {
+			tmpsource[k] = v
+		}
+	}
+
+	loggo.Info("start send_to_server %d %d %d", len(covdata), len(source), len(tmpsource))
+
+	pushdata := PushData{covdata, tmpsource}
 
 	b := bytes.Buffer{}
 	e := gob.NewEncoder(&b)
@@ -370,7 +408,7 @@ func ini_client() error {
 		}
 		last = time.Now()
 
-		covdata, err := backup_cov(curpids)
+		covdata, covsource, err := backup_cov(curpids)
 		if err != nil {
 			loggo.Error("backup_cov failed %s", err)
 			return err
@@ -428,7 +466,7 @@ func ini_client() error {
 			}
 		}
 
-		send_to_server(covdata, cursource)
+		send_to_server(covdata, covsource, cursource)
 
 		curpids = newpids
 		cursource = newsource
@@ -556,5 +594,7 @@ func CoverageHandler(r *http.Request, w http.ResponseWriter, path string, param 
 /////////////////////////////////////////////////////////////////////////////////
 
 func ini_gen() {
-
+	// TODO load file
+	// TODO get per source and coverage
+	// TODO merge with current
 }
