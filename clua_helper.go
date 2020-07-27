@@ -37,7 +37,7 @@ func main() {
 
 	loggo.Ini(loggo.Config{
 		Level:      loggo.LEVEL_INFO,
-		Prefix:     "coverage",
+		Prefix:     "helper",
 		MaxDay:     3,
 		NoLogFile:  false,
 		NoPrint:    false,
@@ -70,7 +70,7 @@ type PushData struct {
 
 func load_pids() ([]int, error) {
 	var pids []int
-	cmd := exec.Command("bash", "-c", "ps -ef | grep \""+*binname+" \" | grep -v grep | grep -v coverage_agent | awk '{print $2}' ")
+	cmd := exec.Command("bash", "-c", "ps -ef | grep \""+*binname+" \" | grep -v grep | grep -v clua_helper | awk '{print $2}' ")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		loggo.Error("exec Command failed with %s", err)
