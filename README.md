@@ -9,7 +9,7 @@ lua的代码覆盖率工具
 * 数据采集用C++编写，性能更高，对宿主进程影响更小
 * 简单require即可使用，或通过[hookso](https://github.com/esrrhs/hookso)注入
 * 解析器用go编写，通过解析lua语法，精确计算文件及函数的覆盖率
-* 支持输出[lcov](http://ltp.sourceforge.net/coverage/lcov.php)格式，进而输出html结果
+* 支持输出[lcov](http://ltp.sourceforge.net/coverage/lcov.php)格式，进而可生成html格式的图形展示
 
 # 编译
 * 编译libclua.so
