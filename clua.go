@@ -144,6 +144,7 @@ func merge(filedatas [][]FileData, dstfile string) {
 
 		var buf [8]byte
 		binary.LittleEndian.PutUint64(buf[:], uint64(v))
+		f.Write(buf[:])
 	}
 
 }
