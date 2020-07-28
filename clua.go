@@ -46,6 +46,8 @@ func main() {
 	showfile := flag.Bool("showfile", false, "show file")
 	lcovfile := flag.String("lcov", "", "output lcov info")
 	mergeto := flag.String("o", "dst.cov", "merge dst")
+	filterpathsource := flag.String("fpsource", "", "when filter filepath, use the special source file path")
+	lcovmd5 := flag.Bool("lcovmd5", false, "output lcov info with md5")
 
 	flag.Parse()
 
@@ -82,14 +84,17 @@ func main() {
 		for _, filedata := range filedatas {
 			for _, p := range filedata {
 				if p.file == *filter || filepath.Clean(p.path) == filepath.Clean(*filterpath) {
-					calc(p, *showcode, *showtotal, *showfunc, lcovfd)
+					if len(*filterpath) != 0 && len(*filterpathsource) != 0 {
+						p.path = *filterpathsource
+					}
+					calc(p, *showcode, *showtotal, *showfunc, lcovfd, *lcovmd5)
 				}
 			}
 		}
 	} else {
 		for _, filedata := range filedatas {
 			for _, p := range filedata {
-				calc(p, *showcode, *showtotal, *showfunc, lcovfd)
+				calc(p, *showcode, *showtotal, *showfunc, lcovfd, *lcovmd5)
 			}
 		}
 	}
@@ -201,11 +206,6 @@ func parse(filename string, root string) ([]FileData, bool) {
 		path, err := filepath.Abs(root + "/" + filename)
 		if err != nil {
 			fmt.Printf("Path fail %s %s %v\n", root, str, err)
-			return nil, false
-		}
-
-		if !fileExists(path) {
-			fmt.Printf("File not found %s\n", path)
 			return nil, false
 		}
 
@@ -368,7 +368,7 @@ func do_showfunc(f FileData, filecontent []string, block []ast.Stmt) {
 	}
 }
 
-func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, validline map[int]int, lcovfd *os.File) {
+func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, validline map[int]int, lcovfd *os.File, lcovmd5 bool) {
 
 	lcovfd.WriteString(fmt.Sprintf("SF:%s\n", f.path))
 
@@ -460,16 +460,20 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, validline m
 			_, ok := funcvalidline[i]
 			if ok {
 				value, _ := f.line[i]
-				srcstr := filecontent[i-1]
-				srcstr = strings.TrimRight(srcstr, "\r\n")
-				srcstr = strings.TrimRight(srcstr, "\n")
-				h := md5.New()
-				h.Write([]byte(srcstr))
-				md5str := base64.URLEncoding.EncodeToString(h.Sum(nil))
-				md5str = strings.TrimRight(md5str, "==")
-				md5str = strings.Replace(md5str, "_", "/", -1)
-				md5str = strings.Replace(md5str, "-", "+", -1)
-				lcovfd.WriteString(fmt.Sprintf("DA:%d,%d,%s\n", i, value, md5str))
+				if lcovmd5 {
+					srcstr := filecontent[i-1]
+					srcstr = strings.TrimRight(srcstr, "\r\n")
+					srcstr = strings.TrimRight(srcstr, "\n")
+					h := md5.New()
+					h.Write([]byte(srcstr))
+					md5str := base64.URLEncoding.EncodeToString(h.Sum(nil))
+					md5str = strings.TrimRight(md5str, "==")
+					md5str = strings.Replace(md5str, "_", "/", -1)
+					md5str = strings.Replace(md5str, "-", "+", -1)
+					lcovfd.WriteString(fmt.Sprintf("DA:%d,%d,%s\n", i, value, md5str))
+				} else {
+					lcovfd.WriteString(fmt.Sprintf("DA:%d,%d\n", i, value))
+				}
 			}
 		}
 	}
@@ -509,7 +513,7 @@ func check_lcovfile_end(lcovfd *os.File) {
 	}
 }
 
-func calc(f FileData, showcode bool, showtotal bool, showfunc bool, lcovfd *os.File) {
+func calc(f FileData, showcode bool, showtotal bool, showfunc bool, lcovfd *os.File, lcovmd5 bool) {
 
 	filecontent, ok := readfile(f.path)
 	if !ok {
@@ -542,16 +546,8 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool, lcovfd *os.F
 	}
 
 	if lcovfd != nil {
-		do_lcovfile(f, filecontent, block, validline, lcovfd)
+		do_lcovfile(f, filecontent, block, validline, lcovfd, lcovmd5)
 	}
-}
-
-func fileExists(filename string) bool {
-	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
 }
 
 func parseLua(filecontent []string) ([]ast.Stmt, bool) {
