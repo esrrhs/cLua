@@ -45,7 +45,7 @@ func main() {
 
 	loggo.Ini(loggo.Config{
 		Level:      loggo.LEVEL_INFO,
-		Prefix:     "helper",
+		Prefix:     "cluahelper",
 		MaxDay:     3,
 		NoLogFile:  false,
 		NoPrint:    false,
@@ -229,7 +229,7 @@ func save_source(gen_id bool) (map[string]SouceData, error) {
 
 		sd := SouceData{string(data), md5, ""}
 		if gen_id {
-			sd.Id = strconv.Itoa(index) + "_" + common.UniqueId()
+			sd.Id = strconv.Itoa(index) + "_" + strings.TrimSuffix(info.Name(), filepath.Ext(info.Name()))
 			index++
 		}
 		sourcemap[path] = sd
@@ -976,9 +976,6 @@ func merge_covdata_file(covdata [][]byte) (string, error) {
 		loggo.Error("merge_covdata_file no dst %s", dst)
 		return "", errors.New("no file")
 	}
-
-	loggo.Info("%s", params)
-	os.Exit(1)
 
 	for _, tmpfile := range tmplist {
 		os.Remove(tmpfile)
