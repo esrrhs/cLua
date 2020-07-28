@@ -51,7 +51,7 @@ func main() {
 
 	if len(inputs) == 0 {
 		flag.Usage()
-		return
+		os.Exit(1)
 	}
 
 	var filedatas [][]FileData
@@ -59,7 +59,7 @@ func main() {
 	for _, input := range inputs {
 		filedata, ok := parse(input, *root)
 		if !ok {
-			return
+			os.Exit(1)
 		}
 		filedatas = append(filedatas, filedata)
 	}
@@ -75,7 +75,7 @@ func main() {
 	err, lcovfd := check_lcovfile_begin(*lcovfile)
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	if len(*filter) != 0 || len(*filterpath) != 0 {
@@ -130,7 +130,7 @@ func merge(filedatas [][]FileData, dstfile string) {
 	f, err := os.Create(dstfile)
 	if err != nil {
 		fmt.Printf("Create fail %v\n", err)
-		return
+		os.Exit(1)
 	}
 	defer f.Close()
 
@@ -513,12 +513,12 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool, lcovfd *os.F
 
 	filecontent, ok := readfile(f.path)
 	if !ok {
-		return
+		os.Exit(1)
 	}
 
 	block, ok := parseLua(filecontent)
 	if !ok {
-		return
+		os.Exit(1)
 	}
 
 	validline := make(map[int]int)
