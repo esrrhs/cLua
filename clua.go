@@ -16,14 +16,27 @@ import (
 )
 
 type FileData struct {
-	file string
-	path string
-	line map[int]uint64
+	file    string
+	path    string
+	line    map[int]uint64
+	srcfile string
+}
+
+type arrayFlags []string
+
+func (f *arrayFlags) String() string {
+	return ""
+}
+
+func (f *arrayFlags) Set(value string) error {
+	*f = append(*f, value)
+	return nil
 }
 
 func main() {
 
-	input := flag.String("i", "", "input cov file")
+	var inputs arrayFlags
+	flag.Var(&inputs, "i", "input cov file")
 	root := flag.String("path", "./", "source code path")
 	filter := flag.String("f", "", "filter filename")
 	filterpath := flag.String("fp", "", "filter filepath")
@@ -32,22 +45,30 @@ func main() {
 	showfunc := flag.Bool("showfunc", true, "show func")
 	showfile := flag.Bool("showfile", false, "show file")
 	lcovfile := flag.String("lcov", "", "output lcov info")
+	mergeto := flag.String("o", "dst.cov", "merge dst")
 
 	flag.Parse()
 
-	if len(*input) == 0 {
+	if len(inputs) == 0 {
 		flag.Usage()
 		return
 	}
 
-	filedata, ok := parse(*input, *root)
-	if !ok {
-		return
+	var filedatas [][]FileData
+
+	for _, input := range inputs {
+		filedata, ok := parse(input, *root)
+		if !ok {
+			return
+		}
+		filedatas = append(filedatas, filedata)
 	}
 
 	if *showfile {
-		for _, p := range filedata {
-			fmt.Println(filepath.Clean(p.path))
+		for _, filedata := range filedatas {
+			for _, p := range filedata {
+				fmt.Println(filepath.Clean(p.path))
+			}
 		}
 	}
 
@@ -58,18 +79,73 @@ func main() {
 	}
 
 	if len(*filter) != 0 || len(*filterpath) != 0 {
-		for _, p := range filedata {
-			if p.file == *filter || filepath.Clean(p.path) == filepath.Clean(*filterpath) {
-				calc(p, *showcode, *showtotal, *showfunc, lcovfd)
+		for _, filedata := range filedatas {
+			for _, p := range filedata {
+				if p.file == *filter || filepath.Clean(p.path) == filepath.Clean(*filterpath) {
+					calc(p, *showcode, *showtotal, *showfunc, lcovfd)
+				}
 			}
 		}
 	} else {
-		for _, p := range filedata {
-			calc(p, *showcode, *showtotal, *showfunc, lcovfd)
+		for _, filedata := range filedatas {
+			for _, p := range filedata {
+				calc(p, *showcode, *showtotal, *showfunc, lcovfd)
+			}
 		}
 	}
 
 	check_lcovfile_end(lcovfd)
+
+	if *mergeto != "" {
+		merge(filedatas, *mergeto)
+	}
+}
+
+func merge(filedatas [][]FileData, dstfile string) {
+
+	tmp := make(map[string]*FileData)
+
+	for _, filedata := range filedatas {
+		for _, p := range filedata {
+			path := p.path
+			fd, ok := tmp[path]
+			if !ok {
+				tmp[path] = &p
+			} else {
+				for k, v := range p.line {
+					fd.line[k] += v
+				}
+			}
+		}
+	}
+
+	tmpout := make(map[string]uint64)
+	for _, filedata := range tmp {
+		for k, v := range filedata.line {
+			str := filedata.srcfile + ":" + strconv.Itoa(k)
+			tmpout[str] += v
+		}
+	}
+
+	f, err := os.Create(dstfile)
+	if err != nil {
+		fmt.Printf("Create fail %v\n", err)
+		return
+	}
+	defer f.Close()
+
+	for k, v := range tmpout {
+		strlen := len(k)
+		var lenbuf [4]byte
+		binary.LittleEndian.PutUint32(lenbuf[:], uint32(strlen))
+		f.Write(lenbuf[:])
+
+		f.Write([]byte(k))
+
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], uint64(v))
+	}
+
 }
 
 func parse(filename string, root string) ([]FileData, bool) {
@@ -145,7 +221,7 @@ func parse(filename string, root string) ([]FileData, bool) {
 		}
 
 		if !find {
-			f := FileData{file, path, make(map[int]uint64)}
+			f := FileData{file, path, make(map[int]uint64), filename}
 			f.line[line] = count
 			filedata = append(filedata, f)
 		}
