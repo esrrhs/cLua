@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"flag"
 	"github.com/esrrhs/go-engine/src/common"
 	"github.com/esrrhs/go-engine/src/loggo"
@@ -36,6 +37,7 @@ var getluastate = flag.String("getluastate", "test.so lua_settop 1", "get lua st
 var tmppath = flag.String("tmppath", "./tmp", "tmp path")
 var lcov = flag.String("lcov", "lcov", "lcov bin path")
 var paralel = flag.Int("paralel", 8, "max paralel")
+var clientroot = flag.String("clientpath", "./", "client source code path")
 
 func main() {
 
@@ -283,6 +285,7 @@ func get_cov_source_file(path string) ([]string, error) {
 		loggo.Error("exec Command failed with %s", err)
 		return nil, err
 	}
+
 	var ret []string
 	filestrs := strings.Split(string(out), "\n")
 	for _, filestr := range filestrs {
@@ -633,7 +636,7 @@ func load_data_file_list() ([]string, error) {
 	return ret, nil
 }
 
-func write_tmp_file(covdata []byte) (string, error) {
+func write_tmp_file(data []byte) (string, error) {
 
 	dstfile, err := gen_tmp_file("")
 	if err != nil {
@@ -647,7 +650,7 @@ func write_tmp_file(covdata []byte) (string, error) {
 	}
 	defer f.Close()
 
-	_, err = f.Write(covdata)
+	_, err = f.Write(data)
 	if err != nil {
 		return "", err
 	}
@@ -686,12 +689,18 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 	}
 
 	if !common.FileExists(oldinfo) {
-		// ./clua -path ./bin/ -i cov/4157.cov -lcov oldinfo.info -showfunc=false -showtotal=false -showcode=false -showfile=false
-		cmd := exec.Command("bash", "-c", *clua+" -path "+*root+" -i "+covfile+" -lcov "+oldinfo+" -showfunc=false -showtotal=false -showcode=false -showfile=false")
-		_, err = cmd.CombinedOutput()
+		// ./clua -path ./bin/ -i cov/4157.cov -fp sourcefile -lcov oldinfo.info -showfunc=false -showtotal=false -showcode=false -showfile=false
+		cmd := exec.Command("bash", "-c", *clua+" -path "+*root+" -i "+covfile+" -fp "+sourcefile+
+			" -lcov "+oldinfo+" -showfunc=false -showtotal=false -showcode=false -showfile=false")
+		out, err := cmd.CombinedOutput()
 		if err != nil {
-			loggo.Error("exec Command failed with %s", err)
+			loggo.Error("exec Command failed with %s %s %s", string(out), err, oldinfo)
 			return err
+		}
+
+		if !common.FileExists(oldinfo) {
+			loggo.Error("lcov_add no oldinfo %s", oldinfo)
+			return errors.New("no file")
 		}
 
 		loggo.Info("lcov add ok new %s %s", sourcefile, oldinfo)
@@ -702,8 +711,9 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 			return err
 		}
 
-		// ./clua -path ./bin/ -i cov/4157.cov -lcov newinfo.info -showfunc=false -showtotal=false -showcode=false -showfile=false
-		cmd := exec.Command("bash", "-c", *clua+" -path "+*root+" -i "+covfile+" -lcov "+newinfo+" -showfunc=false -showtotal=false -showcode=false -showfile=false")
+		// ./clua -path ./bin/ -i cov/4157.cov -fp sourcefile -lcov newinfo.info -showfunc=false -showtotal=false -showcode=false -showfile=false
+		cmd := exec.Command("bash", "-c", *clua+" -path "+*root+" -i "+covfile+" -fp "+sourcefile+
+			" -lcov "+newinfo+" -showfunc=false -showtotal=false -showcode=false -showfile=false")
 		_, err = cmd.CombinedOutput()
 		if err != nil {
 			loggo.Error("exec Command failed with %s", err)
@@ -711,13 +721,17 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 		}
 		loggo.Info("lcov add newinfo %s %s %s", covfile, sourcefile, newinfo)
 
-		// lcov -a oldinfo.info -a newinfo.info -o oldinfo.info
-		cmd = exec.Command("bash", "-c", *lcov+" -a "+oldinfo+" -a "+newinfo+" -o "+oldinfo)
+		// lcov -a oldinfo.info -a newinfo.info -o oldinfo.info --checksum
+		cmd = exec.Command("bash", "-c", *lcov+" -a "+oldinfo+" -a "+newinfo+" -o "+oldinfo+" --checksum")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			loggo.Error("exec Command failed with %s %s %s %s", string(out), err, oldinfo, newinfo)
-			os.Exit(1)
 			return err
+		}
+
+		if !common.FileExists(oldinfo) {
+			loggo.Error("lcov_add no oldinfo %s", oldinfo)
+			return errors.New("no file")
 		}
 
 		os.Remove(newinfo)
@@ -728,7 +742,7 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 	return nil
 }
 
-func lcov_merge(covfile string, sourcefile string, id string) error {
+func lcov_merge(covfile string, sourcefile string, source map[string]SouceData, id string) error {
 
 	oldinfo, err := gen_tmp_file(id + ".info")
 	if err != nil {
@@ -736,30 +750,88 @@ func lcov_merge(covfile string, sourcefile string, id string) error {
 		return err
 	}
 
-	// TODO
+	sourcedata, ok := source[sourcefile]
+	if !ok {
+		loggo.Error("source no sourcefile %s", sourcefile)
+		return err
+	}
+
+	oldsourcefile, err := write_tmp_file([]byte(sourcedata.Content))
+	if err != nil {
+		loggo.Error("write_tmp_file failed with %s", err)
+		return err
+	}
+
+	difffile, err := gen_tmp_file("")
+	if err != nil {
+		loggo.Error("gen_tmp_file failed with %s", err)
+		return err
+	}
+
+	// diff -u $PWD/old/prog.c $PWD/new/prog.c > diff
+	cmd := exec.Command("bash", "-c", "diff -u "+oldsourcefile+" "+sourcefile+" > "+difffile)
+	cmd.CombinedOutput()
+
+	if !common.FileExists(difffile) {
+		loggo.Error("lcov_add no difffile %s", oldinfo)
+		return errors.New("no file")
+	}
+
+	oldsourceinfo, err := gen_tmp_file(id + "_old.info")
+	if err != nil {
+		loggo.Error("gen_tmp_file failed with %s", err)
+		return err
+	}
+
+	// ./clua -path ./bin/ -i cov/4157.cov -fp sourcefile -lcov oldsourceinfo.info -showfunc=false -showtotal=false -showcode=false -showfile=false
+	cmd = exec.Command("bash", "-c", *clua+" -path "+*root+" -i "+covfile+" -fp "+sourcefile+
+		" -lcov "+oldsourceinfo+" -showfunc=false -showtotal=false -showcode=false -showfile=false")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		loggo.Error("exec Command failed with %s %s %s", string(out), err, oldsourceinfo)
+		return err
+	}
+
+	if !common.FileExists(oldinfo) {
+		// lcov --diff oldsourceinfo.info difffile --convert-filenames -o oldinfo.info --checksum
+		cmd = exec.Command("bash", "-c", *lcov+" --diff "+oldsourceinfo+" "+difffile+" --convert-filenames -o "+oldinfo+" --checksum")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			loggo.Error("exec Command failed with %s %s %s %s", string(out), err, oldsourceinfo, oldinfo)
+			return err
+		}
+	} else {
+
+	}
 
 	loggo.Info("lcov merge ok %s %s", sourcefile, oldinfo)
 
 	return nil
 }
 
-func gen_cov_sourcefile(covfile string, sourcefile string, source map[string]SouceData, cursource map[string]SouceData) {
+func gen_cov_sourcefile(covfile string, sourcefile string, source map[string]SouceData, cursource map[string]SouceData) error {
+	rela, err := filepath.Rel(*root, sourcefile)
+	if err != nil {
+		loggo.Error("filepath Rel fail %s", err)
+		return err
+	}
+
 	sourcedata, ok := source[sourcefile]
 	if !ok {
 		loggo.Info("cov %s no source file %s, skip", covfile, sourcefile)
-		return
+		return nil
 	}
 
-	cursourcedata, ok := cursource[sourcefile]
+	cursourcedata, ok := cursource[filepath.Clean(filepath.Join(*clientroot, rela))]
 	if !ok {
 		loggo.Info("current no source file %s, skip", sourcefile)
-		return
+		return nil
 	}
 
 	if sourcedata.Md5sum == cursourcedata.Md5sum {
-		lcov_add(covfile, sourcefile, cursourcedata.Id)
+		return lcov_add(covfile, sourcefile, cursourcedata.Id)
 	} else {
-		lcov_merge(covfile, sourcefile, cursourcedata.Id)
+		return lcov_merge(covfile, sourcefile, source, cursourcedata.Id)
 	}
 }
 
@@ -767,25 +839,42 @@ func gen_covdata(covfile string, source map[string]SouceData, cursource map[stri
 
 	sourcelist, err := get_cov_source_file(covfile)
 	if err != nil {
-		loggo.Error("get_cov_source_file fail  %v", err)
+		loggo.Error("get_cov_source_file fail %v", err)
 		return err
 	}
 
+	var errret error
 	var count int32
 	for _, file := range sourcelist {
 		sourcefile := file
 		if int(count) > *paralel {
-			gen_cov_sourcefile(covfile, sourcefile, source, cursource)
+			err := gen_cov_sourcefile(covfile, sourcefile, source, cursource)
+			if err != nil {
+				errret = err
+			}
 		} else {
 			atomic.AddInt32(&count, 1)
 			go func() {
 				defer atomic.AddInt32(&count, -1)
-				gen_cov_sourcefile(covfile, sourcefile, source, cursource)
+				err := gen_cov_sourcefile(covfile, sourcefile, source, cursource)
+				if err != nil {
+					errret = err
+				}
 			}()
+		}
+		if errret != nil {
+			loggo.Error("gen_cov_sourcefile fail %v", err)
+			return err
 		}
 	}
 
-	os.Remove(covfile)
+	for count > 0 {
+		time.Sleep(time.Second)
+	}
+
+	if errret != nil {
+		return err
+	}
 
 	return nil
 }
@@ -809,16 +898,21 @@ func merge_covdata_file(covdata [][]byte) (string, error) {
 
 	params := ""
 	for _, tmpfile := range tmplist {
-		params += " -a " + tmpfile
+		params += " -i " + tmpfile
 	}
 	params += " -o " + dst
 
-	// lcov -a a.info -a b.info -o dst.info
-	cmd := exec.Command("bash", "-c", *lcov+params)
+	// ./clua -i a.cov -i b.cov -o dst.cov -path ./bin/ -showfunc=false -showtotal=false -showcode=false -showfile=false
+	cmd := exec.Command("bash", "-c", *clua+params+" -path "+*root+" -showfunc=false -showtotal=false -showcode=false -showfile=false")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		loggo.Error("exec Command failed with %s %s %s", string(out), err, params)
 		return "", err
+	}
+
+	if !common.FileExists(dst) {
+		loggo.Error("merge_covdata_file no dst %s", dst)
+		return "", errors.New("no file")
 	}
 
 	return dst, nil
@@ -875,6 +969,10 @@ func gen_data_file(filename string, cursource map[string]SouceData, index int, t
 		return err
 	}
 
+	os.Remove(covfile)
+
+	loggo.Info("gen file ok %s %d/%d", filename, index+1, total)
+
 	return nil
 }
 
@@ -914,7 +1012,7 @@ func ini_gen() error {
 	remove_all_tmp()
 
 	for index, filename := range filelist {
-		err := gen_data_file(filename, cursource, index, len(filelist))
+		err = gen_data_file(filename, cursource, index, len(filelist))
 		if err != nil {
 			loggo.Error("gen_data_file fail %v", err)
 			return err
