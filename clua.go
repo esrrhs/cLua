@@ -26,6 +26,7 @@ func main() {
 	input := flag.String("i", "", "input cov file")
 	root := flag.String("path", "./", "source code path")
 	filter := flag.String("f", "", "filter filename")
+	filterpath := flag.String("fp", "", "filter filepath")
 	showcode := flag.Bool("showcode", true, "show code")
 	showtotal := flag.Bool("showtotal", true, "show total")
 	showfunc := flag.Bool("showfunc", true, "show func")
@@ -46,7 +47,7 @@ func main() {
 
 	if *showfile {
 		for _, p := range filedata {
-			fmt.Println(p.path)
+			fmt.Println(filepath.Clean(p.path))
 		}
 	}
 
@@ -56,9 +57,9 @@ func main() {
 		return
 	}
 
-	if len(*filter) != 0 {
+	if len(*filter) != 0 || len(*filterpath) != 0 {
 		for _, p := range filedata {
-			if p.file == *filter {
+			if p.file == *filter || filepath.Clean(p.path) == filepath.Clean(*filterpath) {
 				calc(p, *showcode, *showtotal, *showfunc, lcovfd)
 			}
 		}

@@ -32,6 +32,7 @@ var covinter = flag.Int("covinter", 5, "saved coverage inter")
 var server = flag.String("server", "http://127.0.0.1:8877", "send to server host")
 var port = flag.Int("port", 8877, "server listen port")
 var getluastate = flag.String("getluastate", "test.so lua_settop 1", "get lua state command")
+var tmppath = flag.String("tmppath", "./tmp", "tmp path")
 
 func main() {
 
@@ -61,6 +62,7 @@ func main() {
 type SouceData struct {
 	Content string
 	Md5sum  string
+	Id      string
 }
 
 type PushData struct {
@@ -184,7 +186,7 @@ func start_inject(pid int) error {
 	return nil
 }
 
-func save_source() (map[string]SouceData, error) {
+func save_source(gen_id bool) (map[string]SouceData, error) {
 	loggo.Info("start save_source %s", *root)
 
 	skippath := filepath.Join(*root, *skiproot)
@@ -193,6 +195,7 @@ func save_source() (map[string]SouceData, error) {
 	bytes := 0
 	sourcemap := make(map[string]SouceData)
 
+	index := 0
 	err := filepath.Walk(*root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			loggo.Error("prevent panic by handling failure accessing a path %q: %v", path, err)
@@ -219,7 +222,12 @@ func save_source() (map[string]SouceData, error) {
 		}
 		md5 := common.GetMd5String(string(data))
 
-		sourcemap[path] = SouceData{string(data), md5}
+		sd := SouceData{string(data), md5, ""}
+		if gen_id {
+			sd.Id = strconv.Itoa(index) + "_" + common.UniqueId()
+			index++
+		}
+		sourcemap[path] = sd
 		bytes += len(data)
 		return nil
 	})
@@ -245,7 +253,7 @@ func reset_client() (map[string]SouceData, []int, error) {
 		}
 	}
 
-	cursource, err := save_source()
+	cursource, err := save_source(false)
 	if err != nil {
 		loggo.Error("save_source failed %s", err)
 		return nil, nil, err
@@ -430,7 +438,7 @@ func ini_client() error {
 			}
 		}
 
-		newsource, err := save_source()
+		newsource, err := save_source(false)
 		if err != nil {
 			loggo.Error("save_source failed %s", err)
 			return err
@@ -491,7 +499,7 @@ func ini_server() error {
 	loggo.Info("listen on " + strconv.Itoa(*port))
 	err := http.ListenAndServe(":"+strconv.Itoa(*port), nil)
 	if err != nil {
-		loggo.Error("ListenAndServe %v", err)
+		loggo.Error("ListenAndServe fail %v", err)
 		return err
 	}
 	loggo.Info("quit")
@@ -593,8 +601,169 @@ func CoverageHandler(r *http.Request, w http.ResponseWriter, path string, param 
 
 /////////////////////////////////////////////////////////////////////////////////
 
-func ini_gen() {
-	// TODO load file
-	// TODO get per source and coverage
-	// TODO merge with current
+func load_data_file_list() ([]string, error) {
+	var ret []string
+	filepath.Walk(*covpath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			loggo.Error("prevent panic by handling failure accessing a path %q: %v", path, err)
+			return err
+		}
+
+		if info == nil || info.IsDir() {
+			return nil
+		}
+
+		if !strings.HasSuffix(info.Name(), ".data") {
+			return nil
+		}
+
+		ret = append(ret, filepath.Clean(path))
+		loggo.Info("load_data_file_list %s", filepath.Clean(path))
+
+		return nil
+	})
+
+	return ret, nil
+}
+
+func write_tmp_file(covdata []byte) (string, error) {
+
+	thetmppath, err := filepath.Abs(*tmppath)
+	if err != nil {
+		loggo.Error("filepath Abs failed with %s", err)
+		return "", err
+	}
+
+	err = os.MkdirAll(thetmppath, 0755)
+	if err != nil {
+		loggo.Error("os MkdirAll failed with %s", err)
+		return "", err
+	}
+
+	filename := common.UniqueId() + ".tmp"
+	dstfile := filepath.Join(thetmppath, filename)
+
+	f, err := os.Create(dstfile)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	_, err = f.Write(covdata)
+	if err != nil {
+		return "", err
+	}
+
+	return dstfile, nil
+}
+
+func gen_covdata(covdata []byte, source map[string]SouceData, cursource map[string]SouceData) error {
+	filepath, err := write_tmp_file(covdata)
+	if err != nil {
+		loggo.Error("write_tmp_file fail  %v", err)
+		return err
+	}
+	sourcelist, err := get_cov_source_file(filepath)
+	if err != nil {
+		loggo.Error("get_cov_source_file fail  %v", err)
+		return err
+	}
+
+	for _, sourcefile := range sourcelist {
+
+		sourcedata, ok := source[sourcefile]
+		if !ok {
+			loggo.Info("cov no source file %s, skip", sourcefile)
+			continue
+		}
+
+		cursourcedata, ok := cursource[sourcefile]
+		if !ok {
+			loggo.Info("current no source file %s, skip", sourcefile)
+			continue
+		}
+
+		if sourcedata.Md5sum == cursourcedata.Md5sum {
+			lcov_add(filepath, sourcefile, sourcedata.Id)
+		} else {
+		}
+	}
+
+	os.Remove(filepath)
+
+	return nil
+}
+
+func gen_data_file(filename string, cursource map[string]SouceData, index int, total int) error {
+
+	filedata, err := ioutil.ReadFile(filename)
+	if err != nil {
+		loggo.Error("ioutil ReadFile fail %q: %v", filename, err)
+		return err
+	}
+	data := string(filedata)
+
+	filedata, err = base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		loggo.Error("base64 DecodeString fail %q: %v", filename, err)
+		return err
+	}
+	data = string(filedata)
+
+	data = common.GunzipString(data)
+	if len(data) <= 0 {
+		loggo.Error("GunzipString fail %q: %v", filename, err)
+		return err
+	}
+
+	b := bytes.Buffer{}
+	_, err = b.WriteString(data)
+	if err != nil {
+		loggo.Error("Buffer WriteString fail %q: %v", filename, err)
+		return err
+	}
+
+	e := gob.NewDecoder(&b)
+	var pushdata PushData
+	err = e.Decode(&pushdata)
+	if err != nil {
+		loggo.Error("Decode fail %v", err)
+		return err
+	}
+
+	loggo.Info("read file %s %d %d %d/%d", filename, len(pushdata.Covdata), len(pushdata.Source), index+1, total)
+
+	for _, covdata := range pushdata.Covdata {
+		err := gen_covdata(covdata, pushdata.Source, cursource)
+		if err != nil {
+			loggo.Error("gen_covdata fail %q: %v", filename, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func ini_gen() error {
+	cursource, err := save_source(true)
+	if err != nil {
+		loggo.Error("save_source fail %v", err)
+		return err
+	}
+
+	filelist, err := load_data_file_list()
+	if err != nil {
+		loggo.Error("load_data_file_list fail %v", err)
+		return err
+	}
+
+	for index, filename := range filelist {
+		err := gen_data_file(filename, cursource, index, len(filelist))
+		if err != nil {
+			loggo.Error("gen_data_file fail %v", err)
+			return err
+		}
+	}
+
+	return nil
 }
