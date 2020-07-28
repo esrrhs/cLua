@@ -108,17 +108,17 @@ func main() {
 
 func merge(filedatas [][]FileData, dstfile string) {
 
-	tmp := make(map[string]*FileData)
+	tmp := make(map[string]FileData)
 
 	for _, filedata := range filedatas {
 		for _, p := range filedata {
 			path := p.path
-			fd, ok := tmp[path]
+			_, ok := tmp[path]
 			if !ok {
-				tmp[path] = &p
+				tmp[path] = p
 			} else {
 				for k, v := range p.line {
-					fd.line[k] += v
+					tmp[path].line[k] += v
 				}
 			}
 		}
