@@ -38,6 +38,8 @@ var tmppath = flag.String("tmppath", "./tmp", "tmp path")
 var lcov = flag.String("lcov", "lcov", "lcov bin path")
 var paralel = flag.Int("paralel", 8, "max paralel")
 var clientroot = flag.String("clientpath", "./", "client source code path")
+var genhtml = flag.String("genhtml", "genhtml", "genhtml bin path")
+var htmloutputpath = flag.String("htmlout", "./htmlout", "html output path")
 
 func main() {
 
@@ -1062,6 +1064,82 @@ func remove_all_tmp() {
 	})
 }
 
+func merge_result_info(cursource map[string]SouceData) error {
+
+	loggo.Info("start merge_result_info")
+
+	params := ""
+
+	resultfile, err := gen_tmp_file("")
+	if err != nil {
+		loggo.Error("gen_tmp_file failed with %s", err)
+		return err
+	}
+
+	loggo.Info("merge_result_info resultfile %s", resultfile)
+
+	for _, cursourcedata := range cursource {
+		oldinfo, err := gen_tmp_file(cursourcedata.Id + ".info")
+		if err != nil {
+			loggo.Error("gen_tmp_file failed with %s", err)
+			return err
+		}
+
+		if !common.FileExists(oldinfo) {
+			continue
+		}
+
+		params += " -a " + oldinfo
+	}
+
+	params += " -o " + resultfile
+
+	loggo.Info("merge_result_info params %s", params)
+
+	// lcov -a a.info -a b.info -o resultfile.info
+	cmd := exec.Command("bash", "-c", *lcov+params)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		loggo.Error("exec Command failed with %s %s %s", string(out), err, params)
+		return err
+	}
+
+	if !common.FileExists(resultfile) {
+		loggo.Error("merge_result_info no resultfile %s %s", resultfile, params)
+		return errors.New("no file")
+	}
+
+	loggo.Info("merge_result_info start genhtml %s", *htmloutputpath)
+
+	// genhtml -o ./htmlout resultfile.info
+	cmd = exec.Command("bash", "-c", *genhtml+" -o "+*htmloutputpath+" "+resultfile)
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		loggo.Error("exec Command failed with %s %s %s", string(out), err, resultfile)
+		return err
+	}
+
+	loggo.Info("merge_result_info genhtml ok %s", *htmloutputpath)
+
+	for _, cursourcedata := range cursource {
+		oldinfo, err := gen_tmp_file(cursourcedata.Id + ".info")
+		if err != nil {
+			loggo.Error("gen_tmp_file failed with %s", err)
+			return err
+		}
+
+		if !common.FileExists(oldinfo) {
+			continue
+		}
+
+		os.Remove(oldinfo)
+	}
+
+	os.Remove(resultfile)
+
+	return nil
+}
+
 func ini_gen() error {
 	cursource, err := save_source(true)
 	if err != nil {
@@ -1075,7 +1153,7 @@ func ini_gen() error {
 		return err
 	}
 
-	remove_all_tmp()
+	//remove_all_tmp()
 
 	for index, filename := range filelist {
 		err = gen_data_file(filename, cursource, index, len(filelist))
@@ -1083,6 +1161,12 @@ func ini_gen() error {
 			loggo.Error("gen_data_file fail %v", err)
 			return err
 		}
+	}
+
+	err = merge_result_info(cursource)
+	if err != nil {
+		loggo.Error("merge_result_info fail %v", err)
+		return err
 	}
 
 	return nil
