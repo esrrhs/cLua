@@ -167,6 +167,8 @@ func reverse_to_cov(root string, lcovfile string, covfile string) {
 				str := filename + ":" + strconv.Itoa(line)
 				tmpout[str] += n
 			}
+			filename = ""
+			linedata = make(map[int]uint64)
 		}
 	}
 
