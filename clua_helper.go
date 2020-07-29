@@ -40,6 +40,7 @@ var paralel = flag.Int("paralel", 8, "max paralel")
 var clientroot = flag.String("clientpath", "./", "client source code path")
 var genhtml = flag.String("genhtml", "genhtml", "genhtml bin path")
 var htmloutputpath = flag.String("htmlout", "./htmlout", "html output path")
+var deletecov = flag.Bool("deletecovpath", true, "delete coverage path data")
 
 func main() {
 
@@ -1197,6 +1198,12 @@ func ini_gen() error {
 	if err != nil {
 		loggo.Error("merge_result_info fail %v", err)
 		return err
+	}
+
+	if *deletecov {
+		for _, filename := range filelist {
+			os.Remove(filename)
+		}
 	}
 
 	return nil

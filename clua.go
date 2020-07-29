@@ -48,12 +48,18 @@ func main() {
 	mergeto := flag.String("o", "dst.cov", "merge dst")
 	filterpathsource := flag.String("fpsource", "", "when filter filepath, use the special source file path")
 	lcovmd5 := flag.Bool("lcovmd5", false, "output lcov info with md5")
+	reverse := flag.Bool("reverse", false, "reverse from lcov file to cov file")
 
 	flag.Parse()
 
 	if len(inputs) == 0 {
 		flag.Usage()
 		os.Exit(1)
+	}
+
+	if *reverse {
+		reverse_to_cov(*root, *lcovfile, inputs[0])
+		return
 	}
 
 	var filedatas [][]FileData
@@ -108,6 +114,65 @@ func main() {
 	}
 }
 
+func reverse_to_cov(root string, lcovfile string, covfile string) {
+
+	data, err := ioutil.ReadFile(lcovfile)
+	if err != nil {
+		fmt.Printf("ReadFile fail %v\n", err)
+		os.Exit(1)
+	}
+
+	absroot, err := filepath.Abs(root)
+	if err != nil {
+		fmt.Printf("filepath Abs fail %v\n", err)
+		os.Exit(1)
+	}
+
+	tmpout := make(map[string]uint64)
+
+	filename := ""
+	linedata := make(map[int]uint64)
+
+	datastr := string(data)
+	for _, str := range strings.Split(datastr, "\n") {
+		if strings.HasPrefix(str, "SF:") {
+			str = strings.TrimLeft(str, "SF:")
+			str = strings.TrimSpace(str)
+			filename, err = filepath.Rel(absroot, str)
+			if err != nil {
+				fmt.Printf("filepath Rel fail %v\n", err)
+				os.Exit(1)
+			}
+		} else if strings.HasPrefix(str, "DA:") {
+			str = strings.TrimLeft(str, "DA:")
+			str = strings.TrimSpace(str)
+			params := strings.Split(str, ",")
+			if len(params) < 2 {
+				fmt.Printf("parse DA fail %s\n", str)
+				os.Exit(1)
+			}
+			line, err := strconv.Atoi(params[0])
+			if err != nil {
+				fmt.Printf("Atoi fail %v\n", err)
+				os.Exit(1)
+			}
+			data, err := strconv.Atoi(params[1])
+			if err != nil {
+				fmt.Printf("Atoi fail %v\n", err)
+				os.Exit(1)
+			}
+			linedata[line] += uint64(data)
+		} else if strings.HasPrefix(str, "end_of_record") {
+			for line, n := range linedata {
+				str := filename + ":" + strconv.Itoa(line)
+				tmpout[str] += n
+			}
+		}
+	}
+
+	output_covfile(covfile, tmpout)
+}
+
 func merge(filedatas [][]FileData, dstfile string) {
 
 	tmp := make(map[string]FileData)
@@ -133,6 +198,11 @@ func merge(filedatas [][]FileData, dstfile string) {
 			tmpout[str] += v
 		}
 	}
+
+	output_covfile(dstfile, tmpout)
+}
+
+func output_covfile(dstfile string, tmpout map[string]uint64) {
 
 	f, err := os.Create(dstfile)
 	if err != nil {
