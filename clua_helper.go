@@ -1078,6 +1078,7 @@ func merge_result_info(cursource map[string]SouceData) error {
 
 	loggo.Info("merge_result_info resultfile %s", resultfile)
 
+	n := 0
 	for _, cursourcedata := range cursource {
 		oldinfo, err := gen_tmp_file(cursourcedata.Id + ".info")
 		if err != nil {
@@ -1090,36 +1091,41 @@ func merge_result_info(cursource map[string]SouceData) error {
 		}
 
 		params += " -a " + oldinfo
+		n++
 	}
 
-	params += " -o " + resultfile
+	if n > 0 {
+		params += " -o " + resultfile
 
-	loggo.Info("merge_result_info params %s", params)
+		loggo.Info("merge_result_info params %s", params)
 
-	// lcov -a a.info -a b.info -o resultfile.info
-	cmd := exec.Command("bash", "-c", *lcov+params)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		loggo.Error("exec Command failed with %s %s %s", string(out), err, params)
-		return err
+		// lcov -a a.info -a b.info -o resultfile.info
+		cmd := exec.Command("bash", "-c", *lcov+params)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			loggo.Error("exec Command failed with %s %s %s", string(out), err, params)
+			return err
+		}
+
+		if !common.FileExists(resultfile) {
+			loggo.Error("merge_result_info no resultfile %s %s", resultfile, params)
+			return errors.New("no file")
+		}
+
+		loggo.Info("merge_result_info start genhtml %s", *htmloutputpath)
+
+		// genhtml -o ./htmlout resultfile.info
+		cmd = exec.Command("bash", "-c", *genhtml+" -o "+*htmloutputpath+" "+resultfile)
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			loggo.Error("exec Command failed with %s %s %s", string(out), err, resultfile)
+			return err
+		}
+
+		loggo.Info("merge_result_info genhtml ok %s", *htmloutputpath)
+	} else {
+		loggo.Info("no info, merge_result_info skip %s", *htmloutputpath)
 	}
-
-	if !common.FileExists(resultfile) {
-		loggo.Error("merge_result_info no resultfile %s %s", resultfile, params)
-		return errors.New("no file")
-	}
-
-	loggo.Info("merge_result_info start genhtml %s", *htmloutputpath)
-
-	// genhtml -o ./htmlout resultfile.info
-	cmd = exec.Command("bash", "-c", *genhtml+" -o "+*htmloutputpath+" "+resultfile)
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		loggo.Error("exec Command failed with %s %s %s", string(out), err, resultfile)
-		return err
-	}
-
-	loggo.Info("merge_result_info genhtml ok %s", *htmloutputpath)
 
 	for _, cursourcedata := range cursource {
 		oldinfo, err := gen_tmp_file(cursourcedata.Id + ".info")
