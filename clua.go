@@ -74,32 +74,34 @@ func main() {
 		}
 	}
 
-	err, lcovfd := check_lcovfile_begin(*lcovfile)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	if *showcode || *showtotal || *showfunc || len(*lcovfile) != 0 {
+		err, lcovfd := check_lcovfile_begin(*lcovfile)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 
-	if len(*filter) != 0 || len(*filterpath) != 0 {
-		for _, filedata := range filedatas {
-			for _, p := range filedata {
-				if p.file == *filter || filepath.Clean(p.path) == filepath.Clean(*filterpath) {
-					if len(*filterpath) != 0 && len(*filterpathsource) != 0 {
-						p.path = *filterpathsource
+		if len(*filter) != 0 || len(*filterpath) != 0 {
+			for _, filedata := range filedatas {
+				for _, p := range filedata {
+					if p.file == *filter || filepath.Clean(p.path) == filepath.Clean(*filterpath) {
+						if len(*filterpath) != 0 && len(*filterpathsource) != 0 {
+							p.path = *filterpathsource
+						}
+						calc(p, *showcode, *showtotal, *showfunc, lcovfd, *lcovmd5)
 					}
+				}
+			}
+		} else {
+			for _, filedata := range filedatas {
+				for _, p := range filedata {
 					calc(p, *showcode, *showtotal, *showfunc, lcovfd, *lcovmd5)
 				}
 			}
 		}
-	} else {
-		for _, filedata := range filedatas {
-			for _, p := range filedata {
-				calc(p, *showcode, *showtotal, *showfunc, lcovfd, *lcovmd5)
-			}
-		}
-	}
 
-	check_lcovfile_end(lcovfd)
+		check_lcovfile_end(lcovfd)
+	}
 
 	if *mergeto != "" {
 		merge(filedatas, *mergeto)
