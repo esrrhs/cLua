@@ -41,6 +41,8 @@ var clientroot = flag.String("clientpath", "./", "client source code path")
 var genhtml = flag.String("genhtml", "genhtml", "genhtml bin path")
 var htmloutputpath = flag.String("htmlout", "./htmlout", "html output path")
 var deletecov = flag.Bool("deletecovpath", true, "delete coverage path data")
+var resultdata = flag.String("resultdata", "", "save result data file path")
+var lastresultdata = flag.String("lastresultdata", "", "merge last save result data file path")
 
 func main() {
 
@@ -332,7 +334,7 @@ func backup_cov(pids []int) ([][]byte, map[string]int, error) {
 	return ret, retsourcefile, nil
 }
 
-func send_to_server(covdata [][]byte, covsource map[string]int, source map[string]SouceData) error {
+func make_push_data(covdata [][]byte, covsource map[string]int, source map[string]SouceData) (string, error) {
 
 	tmpsource := make(map[string]SouceData)
 	for k, v := range source {
@@ -342,7 +344,7 @@ func send_to_server(covdata [][]byte, covsource map[string]int, source map[strin
 		}
 	}
 
-	loggo.Info("start send_to_server %d %d %d", len(covdata), len(source), len(tmpsource))
+	loggo.Info("make_push_data %d %d", len(covdata), len(tmpsource))
 
 	pushdata := PushData{covdata, tmpsource}
 
@@ -351,11 +353,24 @@ func send_to_server(covdata [][]byte, covsource map[string]int, source map[strin
 	err := e.Encode(pushdata)
 	if err != nil {
 		loggo.Error("Encode fail %v", err)
-		return err
+		return "", err
 	}
 	data := string(b.Bytes())
 	data = common.GzipStringBestCompression(data)
 	data = base64.StdEncoding.EncodeToString([]byte(data))
+
+	return data, nil
+}
+
+func send_to_server(covdata [][]byte, covsource map[string]int, source map[string]SouceData) error {
+
+	loggo.Info("start send_to_server %d %d", len(covdata), len(source))
+
+	data, err := make_push_data(covdata, covsource, source)
+	if err != nil {
+		loggo.Error("make_push_data fail %v", err)
+		return err
+	}
 
 	md5str := common.GetMd5String(data)
 
@@ -638,8 +653,26 @@ func CoverageHandler(r *http.Request, w http.ResponseWriter, path string, param 
 
 /////////////////////////////////////////////////////////////////////////////////
 
-func load_data_file_list() ([]string, error) {
+func load_data_file_list() ([]string, string, error) {
 	var ret []string
+
+	retlastresultdataabs := ""
+	if len(*lastresultdata) != 0 {
+		lastresultdataabs, err := filepath.Abs(*lastresultdata)
+		if err != nil {
+			loggo.Error("gen_tmp_file failed with %s", err)
+			return nil, "", err
+		}
+
+		if !common.FileExists(lastresultdataabs) {
+			loggo.Error("last resultdata not find %s", lastresultdataabs)
+			return nil, "", err
+		}
+
+		ret = append(ret, lastresultdataabs)
+		retlastresultdataabs = lastresultdataabs
+	}
+
 	filepath.Walk(*covpath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			loggo.Error("prevent panic by handling failure accessing a path %q: %v", path, err)
@@ -660,7 +693,7 @@ func load_data_file_list() ([]string, error) {
 		return nil
 	})
 
-	return ret, nil
+	return ret, retlastresultdataabs, nil
 }
 
 func write_tmp_file(data []byte) (string, error) {
@@ -926,11 +959,15 @@ func gen_cov_sourcefile(covfile string, sourcefile string, source map[string]Sou
 
 func gen_covdata(covfile string, source map[string]SouceData, cursource map[string]SouceData) error {
 
+	loggo.Info("start gen_covdata %s", covfile)
+
 	sourcelist, err := get_cov_source_file(covfile)
 	if err != nil {
 		loggo.Error("get_cov_source_file fail %v", err)
 		return err
 	}
+
+	loggo.Info("gen_covdata get_cov_source_file %s %d", covfile, len(sourcelist))
 
 	var errret error
 	var count int32
@@ -969,6 +1006,22 @@ func gen_covdata(covfile string, source map[string]SouceData, cursource map[stri
 }
 
 func merge_covdata_file(covdata [][]byte) (string, error) {
+
+	if len(covdata) <= 0 {
+		loggo.Info("merge_covdata_file no data")
+		return "", errors.New("no file")
+	}
+
+	if len(covdata) == 1 {
+		tmpfile, err := write_tmp_file(covdata[0])
+		if err != nil {
+			loggo.Error("write_tmp_file fail  %v", err)
+			return "", err
+		}
+		loggo.Info("merge_covdata_file no need, only one %s", tmpfile)
+		return tmpfile, nil
+	}
+
 	var tmplist []string
 	for _, data := range covdata {
 		tmpfile, err := write_tmp_file(data)
@@ -1007,6 +1060,8 @@ func merge_covdata_file(covdata [][]byte) (string, error) {
 	for _, tmpfile := range tmplist {
 		os.Remove(tmpfile)
 	}
+
+	loggo.Info("merge_covdata_file ok %s", dst)
 
 	return dst, nil
 }
@@ -1089,6 +1144,92 @@ func remove_all_tmp() {
 	})
 }
 
+func save_resultfile(resultfile string, cursource map[string]SouceData) error {
+
+	loggo.Info("start save_resultfile %s", resultfile)
+
+	covflle, err := gen_tmp_file("")
+	if err != nil {
+		loggo.Error("gen_tmp_file failed with %s", err)
+		return err
+	}
+
+	// ./clua -path root -i test1.cov -lcov test.info -reverse
+	cmd := exec.Command("bash", "-c", *clua+" -path "+*root+" -i "+covflle+" -lcov "+resultfile+" -reverse"+"")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		loggo.Error("exec Command failed with %s %s %s", string(out), err, covflle)
+		return err
+	}
+
+	if !common.FileExists(covflle) {
+		loggo.Error("save_resultfile no covflle %s", covflle)
+		return errors.New("no file")
+	}
+
+	loggo.Info("save_resultfile gen cov file %s", covflle)
+
+	covdata, err := ioutil.ReadFile(covflle)
+	if err != nil {
+		loggo.Error("ioutil ReadFile fail %q: %v", covflle, err)
+		return err
+	}
+
+	retsourcefile := make(map[string]int)
+	sourcefiles, err := get_cov_source_file(covflle)
+	if err != nil {
+		loggo.Error("get_cov_source_file fail %q: %v", covflle, err)
+		return err
+	}
+
+	for _, sourcefile := range sourcefiles {
+		retsourcefile[filepath.Clean(sourcefile)]++
+	}
+
+	filename := *resultdata
+	if len(filename) <= 0 {
+		filename = time.Now().Format("2006-01-02_15:04:05_") + common.UniqueId() + ".data"
+	}
+
+	loggo.Info("save_resultfile start compress data %s", filename)
+
+	covdatas := make([][]byte, 0)
+	covdatas = append(covdatas, covdata)
+
+	tmpsource := make(map[string]SouceData)
+	for k, v := range cursource {
+		v.Id = ""
+		tmpsource[k] = v
+	}
+
+	data, err := make_push_data(covdatas, retsourcefile, tmpsource)
+	if err != nil {
+		loggo.Error("make_push_data fail %v", err)
+		return err
+	}
+
+	loggo.Info("save_resultfile start write data %s %d", filename, len(data))
+
+	f, err := os.Create(filename)
+	if err != nil {
+		loggo.Error("Create fail %v", err)
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(data)
+	if err != nil {
+		loggo.Error("WriteString fail %v", err)
+		return err
+	}
+
+	os.Remove(covflle)
+
+	loggo.Info("save_resultfile ok %s %d", filename, len(data))
+
+	return nil
+}
+
 func merge_result_info(cursource map[string]SouceData) error {
 
 	loggo.Info("start merge_result_info")
@@ -1148,6 +1289,12 @@ func merge_result_info(cursource map[string]SouceData) error {
 		}
 
 		loggo.Info("merge_result_info genhtml ok %s", *htmloutputpath)
+
+		err = save_resultfile(resultfile, cursource)
+		if err != nil {
+			loggo.Error("save_resultfile failed with %s", err)
+			return err
+		}
 	} else {
 		loggo.Info("no info, merge_result_info skip %s", *htmloutputpath)
 	}
@@ -1178,7 +1325,7 @@ func ini_gen() error {
 		return err
 	}
 
-	filelist, err := load_data_file_list()
+	filelist, lastresult_filename, err := load_data_file_list()
 	if err != nil {
 		loggo.Error("load_data_file_list fail %v", err)
 		return err
@@ -1202,7 +1349,9 @@ func ini_gen() error {
 
 	if *deletecov {
 		for _, filename := range filelist {
-			os.Remove(filename)
+			if filename != lastresult_filename {
+				os.Remove(filename)
+			}
 		}
 	}
 
