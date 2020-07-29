@@ -45,7 +45,7 @@ func main() {
 	showfunc := flag.Bool("showfunc", true, "show func")
 	showfile := flag.Bool("showfile", false, "show file")
 	lcovfile := flag.String("lcov", "", "output lcov info")
-	mergeto := flag.String("o", "dst.cov", "merge dst")
+	mergeto := flag.String("o", "", "merge dst")
 	filterpathsource := flag.String("fpsource", "", "when filter filepath, use the special source file path")
 	lcovmd5 := flag.Bool("lcovmd5", false, "output lcov info with md5")
 	reverse := flag.Bool("reverse", false, "reverse from lcov file to cov file")
