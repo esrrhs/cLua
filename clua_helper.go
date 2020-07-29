@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"github.com/esrrhs/go-engine/src/common"
+	"github.com/esrrhs/go-engine/src/fastwalk"
 	"github.com/esrrhs/go-engine/src/loggo"
 	"io/ioutil"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -143,7 +145,7 @@ func stop_inject(pid int) error {
 	cmd := exec.Command("bash", "-c", *hookso+" call "+strconv.Itoa(pid)+" "+*libclua+" stop_cov i="+lstatestr)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		loggo.Error("exec Command failed with %s %s", err,  string(out))
+		loggo.Error("exec Command failed with %s %s", err, string(out))
 		return err
 	}
 
@@ -207,23 +209,25 @@ func save_source(gen_id bool) (map[string]SouceData, error) {
 	bytes := 0
 	sourcemap := make(map[string]SouceData)
 
+	var mu sync.Mutex
+
 	index := 0
-	err := filepath.Walk(*root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			loggo.Error("prevent panic by handling failure accessing a path %q: %v", path, err)
-			return err
+	fun := func(path string, typ os.FileMode) error {
+
+		if typ&os.ModeSymlink == os.ModeSymlink {
+			return fastwalk.TraverseLink
 		}
 
-		if info.IsDir() && filepath.Clean(path) == filepath.Clean(skippath) {
-			loggo.Info("skip path %s", filepath.Base(skippath))
-			return filepath.SkipDir
-		}
-
-		if info == nil || info.IsDir() {
+		if typ.IsDir() {
 			return nil
 		}
 
-		if !strings.HasSuffix(info.Name(), ".lua") {
+		if !strings.HasSuffix(path, ".lua") {
+			return nil
+		}
+
+		if strings.HasPrefix(filepath.Clean(path), filepath.Clean(skippath)) {
+			//loggo.Info("skip path %s %s %s", path, filepath.Clean(path), filepath.Base(skippath))
 			return nil
 		}
 
@@ -234,18 +238,27 @@ func save_source(gen_id bool) (map[string]SouceData, error) {
 		}
 		md5 := common.GetMd5String(string(data))
 
+		mu.Lock()
+		defer mu.Unlock()
+
 		sd := SouceData{string(data), md5, ""}
 		if gen_id {
-			sd.Id = strconv.Itoa(index) + "_" + strings.TrimSuffix(info.Name(), filepath.Ext(info.Name()))
+			name := filepath.Base(path)
+			sd.Id = strconv.Itoa(index) + "_" + strings.TrimSuffix(name, filepath.Ext(name))
 			index++
 		}
+
 		sourcemap[path] = sd
 		bytes += len(data)
 		return nil
-	})
+	}
+
+	err := fastwalk.Walk(*root, fun)
 	if err != nil {
+		loggo.Error("godirwalk Walk %s", err)
 		return nil, err
 	}
+
 	loggo.Info("end save_source %s %d %d", *root, len(sourcemap), bytes)
 	return sourcemap, nil
 }
