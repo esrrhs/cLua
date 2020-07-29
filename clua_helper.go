@@ -43,6 +43,8 @@ var htmloutputpath = flag.String("htmlout", "./htmlout", "html output path")
 var deletecov = flag.Bool("deletecovpath", true, "delete coverage path data")
 var resultdata = flag.String("resultdata", "", "save result data file path")
 var lastresultdata = flag.String("lastresultdata", "", "merge last save result data file path")
+var checkinter = flag.Int("checkinter", 60, "client check inter in second")
+var sendinter = flag.Int("sendinter", 3600, "client send inter in second")
 
 func main() {
 
@@ -443,7 +445,7 @@ func ini_client() error {
 	last := time.Now()
 	lastsend := time.Now()
 	for {
-		if time.Now().Sub(last) < time.Minute {
+		if time.Now().Sub(last) < time.Second*time.Duration(*checkinter) {
 			time.Sleep(time.Second)
 			continue
 		}
@@ -522,7 +524,7 @@ func ini_client() error {
 		tosend_covsource = covsource
 		tosend_cursource = cursource
 
-		if time.Now().Sub(lastsend) >= time.Hour {
+		if time.Now().Sub(lastsend) >= time.Second*time.Duration(*sendinter) {
 			loggo.Info("start send per hour")
 			send_to_server(tosend_covdata, tosend_covsource, tosend_cursource)
 			lastsend = time.Now()
