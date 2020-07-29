@@ -420,7 +420,12 @@ func ini_client() error {
 		return err
 	}
 
+	var tosend_covdata [][]byte
+	var tosend_covsource map[string]int
+	var tosend_cursource map[string]SouceData
+
 	last := time.Now()
+	lastsend := time.Now()
 	for {
 		if time.Now().Sub(last) < time.Minute {
 			time.Sleep(time.Second)
@@ -473,6 +478,15 @@ func ini_client() error {
 				loggo.Error("ini_client failed %s", err)
 				return err
 			}
+
+			loggo.Info("start send per hour")
+			if tosend_covdata != nil && tosend_covsource != nil && tosend_cursource != nil {
+				send_to_server(tosend_covdata, tosend_covsource, tosend_cursource)
+				lastsend = time.Now()
+				tosend_covdata = nil
+				tosend_covsource = nil
+				tosend_cursource = nil
+			}
 			continue
 		}
 
@@ -486,7 +500,17 @@ func ini_client() error {
 			}
 		}
 
-		send_to_server(covdata, covsource, cursource)
+		loggo.Info("everything ok")
+
+		tosend_covdata = covdata
+		tosend_covsource = covsource
+		tosend_cursource = cursource
+
+		if time.Now().Sub(lastsend) >= time.Hour {
+			loggo.Info("start send per hour")
+			send_to_server(tosend_covdata, tosend_covsource, tosend_cursource)
+			lastsend = time.Now()
+		}
 
 		curpids = newpids
 		cursource = newsource
@@ -1159,7 +1183,7 @@ func ini_gen() error {
 		return err
 	}
 
-	//remove_all_tmp()
+	remove_all_tmp()
 
 	for index, filename := range filelist {
 		err = gen_data_file(filename, cursource, index, len(filelist))
