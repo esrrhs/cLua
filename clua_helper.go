@@ -111,7 +111,7 @@ func get_lstate(pid int) (string, error) {
 	cmd := exec.Command("bash", "-c", *hookso+" arg "+strconv.Itoa(pid)+" "+*getluastate)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		loggo.Error("exec Command failed with %s", err)
+		loggo.Error("exec Command failed with %s %s", err, string(out))
 		return "", err
 	}
 	lstatestr := string(out)
@@ -122,7 +122,7 @@ func get_lstate(pid int) (string, error) {
 	cmd = exec.Command("bash", "-c", *hookso+" dlopen "+strconv.Itoa(pid)+" "+*libclua)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
-		loggo.Error("exec Command failed with %s", err)
+		loggo.Error("exec Command failed with %s %s", err, string(out))
 		return "", err
 	}
 
@@ -141,9 +141,9 @@ func stop_inject(pid int) error {
 
 	// ./hookso call $PID libclua.so stop_cov i=$L
 	cmd := exec.Command("bash", "-c", *hookso+" call "+strconv.Itoa(pid)+" "+*libclua+" stop_cov i="+lstatestr)
-	_, err = cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		loggo.Error("exec Command failed with %s", err)
+		loggo.Error("exec Command failed with %s %s", err,  string(out))
 		return err
 	}
 
@@ -188,9 +188,9 @@ func start_inject(pid int) error {
 	// ./hookso call $PID libclua.so start_cov i=$L s="dst.cov" i=5
 	cmd := exec.Command("bash", "-c", *hookso+" call "+strconv.Itoa(pid)+" "+*libclua+" start_cov i="+lstatestr+
 		" s=\""+dstfile+"\" i="+strconv.Itoa(*covinter))
-	_, err = cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		loggo.Error("exec Command failed with %s", err)
+		loggo.Error("exec Command failed with %s %s", err, string(out))
 		return err
 	}
 
