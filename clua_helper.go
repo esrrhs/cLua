@@ -248,7 +248,9 @@ func save_source(gen_id bool) (map[string]SouceData, error) {
 			index++
 		}
 
-		sourcemap[path] = sd
+		//loggo.Info("add sourcemap %s", filepath.Clean(path))
+
+		sourcemap[filepath.Clean(path)] = sd
 		bytes += len(data)
 		return nil
 	}
@@ -817,7 +819,7 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 	return nil
 }
 
-func lcov_merge(covfile string, sourcefile string, source map[string]SouceData, id string) error {
+func lcov_merge(covfile string, sourcefile string, clientsoucefile string, source map[string]SouceData, id string) error {
 
 	oldinfo, err := gen_tmp_file(id + ".info")
 	if err != nil {
@@ -825,9 +827,9 @@ func lcov_merge(covfile string, sourcefile string, source map[string]SouceData, 
 		return err
 	}
 
-	sourcedata, ok := source[sourcefile]
+	sourcedata, ok := source[clientsoucefile]
 	if !ok {
-		loggo.Error("source no sourcefile %s", sourcefile)
+		loggo.Error("source no soucefile %s", clientsoucefile)
 		return err
 	}
 
@@ -953,22 +955,24 @@ func gen_cov_sourcefile(covfile string, sourcefile string, source map[string]Sou
 		return err
 	}
 
-	sourcedata, ok := source[sourcefile]
+	clientsoucefile := filepath.Clean(filepath.Join(*clientroot, rela))
+
+	sourcedata, ok := source[clientsoucefile]
 	if !ok {
 		loggo.Info("cov %s no source file %s, skip", covfile, sourcefile)
 		return nil
 	}
 
-	cursourcedata, ok := cursource[filepath.Clean(filepath.Join(*clientroot, rela))]
+	cursourcedata, ok := cursource[sourcefile]
 	if !ok {
-		loggo.Info("current no source file %s, skip", sourcefile)
+		loggo.Info("current no source file %s %s %s %s, skip", sourcefile, rela, filepath.Join(*clientroot, rela), filepath.Clean(filepath.Join(*clientroot, rela)))
 		return nil
 	}
 
 	if sourcedata.Md5sum == cursourcedata.Md5sum {
 		return lcov_add(covfile, sourcefile, cursourcedata.Id)
 	} else {
-		return lcov_merge(covfile, sourcefile, source, cursourcedata.Id)
+		return lcov_merge(covfile, sourcefile, clientsoucefile, source, cursourcedata.Id)
 	}
 }
 
