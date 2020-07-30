@@ -37,10 +37,10 @@ var server = flag.String("server", "http://127.0.0.1:8877", "send to server host
 var port = flag.Int("port", 8877, "server listen port")
 var getluastate = flag.String("getluastate", "test.so lua_settop 1", "get lua state command")
 var tmppath = flag.String("tmppath", "./tmp", "tmp path")
-var lcov = flag.String("lcov", "lcov", "lcov bin path")
+var lcov = flag.String("lcov", "./lcov", "lcov bin path")
 var paralel = flag.Int("paralel", 8, "max paralel")
 var clientroot = flag.String("clientpath", "./", "client source code path")
-var genhtml = flag.String("genhtml", "genhtml", "genhtml bin path")
+var genhtml = flag.String("genhtml", "./genhtml", "genhtml bin path")
 var htmloutputpath = flag.String("htmlout", "./htmlout", "html output path")
 var deletecov = flag.Bool("deletecovpath", true, "delete coverage path data")
 var resultdata = flag.String("resultdata", "", "save result data file path")
@@ -561,6 +561,9 @@ var gpath map[string]func(*http.Request, http.ResponseWriter, string, url.Values
 func ini_server() error {
 
 	http.HandleFunc("/", MyHandler)
+
+	fs := http.FileServer(http.Dir(*htmloutputpath))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	gpath = make(map[string]func(*http.Request, http.ResponseWriter, string, url.Values))
 	gpath["/coverage"] = CoverageHandler
