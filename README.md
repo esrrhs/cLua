@@ -143,9 +143,9 @@ coverage of /home/project/clua/test.lua:
 ```
 * 此时目录下已有```test.info```文件，然后用lcov的工具输出html
 ```
-# genhtml test.info 
+# genhtml -o htmltest test.info 
 ```
-* 打开目录下的index.html如下
+* 打开htmltest目录下的index.html如下
 ![image](./lcov1.png)
 * 点击进入test.lua
 ![image](./lcov2.png)
