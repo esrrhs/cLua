@@ -1303,7 +1303,9 @@ func merge_result_info(cursource map[string]SouceData) error {
 			loggo.Info("merge_result_info resultfile %s", resultfile)
 
 			for i := 0; i < 10 && start < len(inputlist); i++ {
-				params += " -a " + inputlist[start]
+				if common.FileFind(inputlist[start], "DA:") > 0 {
+					params += " -a " + inputlist[start]
+				}
 				start++
 			}
 
