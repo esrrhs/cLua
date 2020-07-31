@@ -1282,17 +1282,18 @@ func merge_result_info(cursource map[string]SouceData) error {
 		}
 
 		inputlist = append(inputlist, oldinfo)
+		n++
 	}
 
 	if n > 0 {
-
-		params := ""
 
 		start := 0
 
 		var lastresultfile string
 
 		for {
+			params := ""
+
 			resultfile, err := gen_tmp_file("")
 			if err != nil {
 				loggo.Error("gen_tmp_file failed with %s", err)
