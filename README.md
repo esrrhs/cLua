@@ -10,6 +10,7 @@ lua的代码覆盖率工具
 * 简单require即可使用，或通过[hookso](https://github.com/esrrhs/hookso)注入
 * 解析器用go编写，通过解析lua语法，精确计算文件及函数的覆盖率
 * 支持输出[lcov](http://ltp.sourceforge.net/coverage/lcov.php)格式，进而可生成html格式的图形展示
+* 配合lua_helper搭建覆盖率统计服务
 
 # 编译
 * 编译libclua.so
@@ -21,6 +22,13 @@ lua的代码覆盖率工具
 ```
 # go get "github.com/milochristiansen/lua" 
 # go build clua.go
+```
+* 编译cluahelper覆盖率服务
+```
+# go get "github.com/esrrhs/go-engine/src/common"
+# go get "github.com/esrrhs/go-engine/src/fastwalk"
+# go get "github.com/esrrhs/go-engine/src/loggo"
+# go build clua_helper.go
 ```
 
 # 使用
@@ -150,6 +158,29 @@ coverage of /home/project/clua/test.lua:
 * 点击进入test.lua
 ![image](./lcov2.png)
 * lcov还可以对info文件进行合并，更多操作参考官方文档
+
+## 覆盖率服务CluaHelper
+覆盖率服务分为客户端、服务器、生成器三部分，二进制文件为clua_helper，参数通过```./clua_helper -h```查看。
+
+#### CluaHelper客户端
+客户端搜索宿主进程，注入进程，打开覆盖率统计，监控代码路径变化，最后发送数据到服务器
+```
+# ./clua_helper -type client -bin 宿主bin名字 -getluastate "获取LuaState的指令，如：liblua.so lua_settop 1" -path 代码目录 -server http://server_ip:8877
+```
+
+#### CluaHelper服务端
+服务器接受客户端的数据，保存数据文件到本地，同时对外服务html结果目录的静态网页。
+```
+# ./clua_helper -type server -port 8877
+```
+
+#### CluaHelper生成器
+生成器读取服务器保存的数据文件，根据本地代码，自动把结果合并，最后生成html结果目录。
+```
+# ./clua_helper -type gen -covpath 服务端保存的结果目录 -path 本地的代码目录 -clientpath 客户端的代码目录
+```
+最后访问http://server_ip:8877/static/即可显示如下网页
+![image](./lcov1.png)
 
 ## 其他
 lua的性能分析工具[pLua](https://github.com/esrrhs/pLua)
