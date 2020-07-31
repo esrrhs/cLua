@@ -47,6 +47,7 @@ var resultdata = flag.String("resultdata", "", "save result data file path")
 var lastresultdata = flag.String("lastresultdata", "", "merge last save result data file path")
 var checkinter = flag.Int("checkinter", 60, "client check inter in second")
 var sendinter = flag.Int("sendinter", 3600, "client send inter in second")
+var statichtml = flag.String("statichtml", "static", "static html prefix")
 
 func main() {
 
@@ -574,7 +575,7 @@ func ini_server() error {
 	http.HandleFunc("/", MyHandler)
 
 	fs := http.FileServer(http.Dir(*htmloutputpath))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	http.Handle("/"+*statichtml+"/", http.StripPrefix("/"+*statichtml+"/", fs))
 
 	gpath = make(map[string]func(*http.Request, http.ResponseWriter, string, url.Values))
 	gpath["/coverage"] = CoverageHandler
