@@ -50,6 +50,8 @@ var sendinter = flag.Int("sendinter", 3600, "client send inter in second")
 
 func main() {
 
+	defer common.CrashLog()
+
 	flag.Parse()
 
 	loggo.Ini(loggo.Config{
@@ -446,6 +448,15 @@ func clear_invalid_file(pids []int) {
 }
 
 func ini_client() error {
+	for {
+		err := run_client()
+		if err != nil {
+			time.Sleep(time.Second * 10)
+		}
+	}
+}
+
+func run_client() error {
 
 	cursource, curpids, err := reset_client()
 	if err != nil {
@@ -1256,15 +1267,7 @@ func merge_result_info(cursource map[string]SouceData) error {
 
 	loggo.Info("start merge_result_info")
 
-	params := ""
-
-	resultfile, err := gen_tmp_file("")
-	if err != nil {
-		loggo.Error("gen_tmp_file failed with %s", err)
-		return err
-	}
-
-	loggo.Info("merge_result_info resultfile %s", resultfile)
+	var inputlist []string
 
 	n := 0
 	for _, cursourcedata := range cursource {
@@ -1278,64 +1281,83 @@ func merge_result_info(cursource map[string]SouceData) error {
 			continue
 		}
 
-		params += " -a " + oldinfo
-		n++
+		inputlist = append(inputlist, oldinfo)
 	}
 
 	if n > 0 {
-		params += " -o " + resultfile
 
-		loggo.Info("merge_result_info params %s", params)
+		params := ""
 
-		// lcov -a a.info -a b.info -o resultfile.info
-		cmd := exec.Command("bash", "-c", *lcov+params)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			loggo.Error("exec Command failed with %s %s %s", string(out), err, params)
-			return err
-		}
+		start := 0
 
-		if !common.FileExists(resultfile) {
-			loggo.Error("merge_result_info no resultfile %s %s", resultfile, params)
-			return errors.New("no file")
+		var lastresultfile string
+
+		for {
+			resultfile, err := gen_tmp_file("")
+			if err != nil {
+				loggo.Error("gen_tmp_file failed with %s", err)
+				return err
+			}
+
+			loggo.Info("merge_result_info resultfile %s", resultfile)
+
+			for i := 0; i < 10 && start < len(inputlist); i++ {
+				params += " -a " + inputlist[start]
+				start++
+			}
+
+			params += " -o " + resultfile
+
+			loggo.Info("merge_result_info params %s", params)
+
+			// lcov -a a.info -a b.info -o resultfile.info
+			cmd := exec.Command("bash", "-c", *lcov+params)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				loggo.Error("exec Command failed with %s %s %s", string(out), err, params)
+				return err
+			}
+
+			if !common.FileExists(resultfile) {
+				loggo.Error("merge_result_info no resultfile %s %s", resultfile, params)
+				return errors.New("no file")
+			}
+
+			if start < len(inputlist) {
+				inputlist = append(inputlist, resultfile)
+			} else {
+				lastresultfile = resultfile
+				break
+			}
 		}
 
 		loggo.Info("merge_result_info start genhtml %s", *htmloutputpath)
 
 		// genhtml -o ./htmlout resultfile.info
-		cmd = exec.Command("bash", "-c", *genhtml+" -o "+*htmloutputpath+" "+resultfile)
-		out, err = cmd.CombinedOutput()
+		cmd := exec.Command("bash", "-c", *genhtml+" -o "+*htmloutputpath+" "+lastresultfile)
+		out, err := cmd.CombinedOutput()
 		if err != nil {
-			loggo.Error("exec Command failed with %s %s %s", string(out), err, resultfile)
+			loggo.Error("exec Command failed with %s %s %s", string(out), err, lastresultfile)
 			return err
 		}
 
 		loggo.Info("merge_result_info genhtml ok %s", *htmloutputpath)
 
-		err = save_resultfile(resultfile, cursource)
+		err = save_resultfile(lastresultfile, cursource)
 		if err != nil {
 			loggo.Error("save_resultfile failed with %s", err)
 			return err
 		}
+
+		os.Remove(lastresultfile)
+
 	} else {
 		loggo.Info("no info, merge_result_info skip %s", *htmloutputpath)
 	}
 
-	for _, cursourcedata := range cursource {
-		oldinfo, err := gen_tmp_file(cursourcedata.Id + ".info")
-		if err != nil {
-			loggo.Error("gen_tmp_file failed with %s", err)
-			return err
-		}
-
-		if !common.FileExists(oldinfo) {
-			continue
-		}
-
+	for _, oldinfo := range inputlist {
 		os.Remove(oldinfo)
 	}
-
-	os.Remove(resultfile)
 
 	return nil
 }
