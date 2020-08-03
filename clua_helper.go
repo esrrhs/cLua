@@ -707,8 +707,7 @@ func load_data_file_list() ([]string, string, error) {
 
 	filepath.Walk(*covpath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			loggo.Error("prevent panic by handling failure accessing a path %q: %v", path, err)
-			return err
+			return nil
 		}
 
 		if info == nil || info.IsDir() {
