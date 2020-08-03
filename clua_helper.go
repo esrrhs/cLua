@@ -795,7 +795,13 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 			return errors.New("no file")
 		}
 
-		loggo.Info("lcov_add new %s %s", sourcefile, oldinfo)
+		if common.FileFind(oldinfo, "DA:") <= 0 {
+			os.Remove(oldinfo)
+			loggo.Info("lcov_add new empty %s %s", sourcefile, oldinfo)
+		} else {
+			loggo.Info("lcov_add new %s %s", sourcefile, oldinfo)
+		}
+
 	} else {
 		newinfo, err := gen_tmp_file(id + "_new.info")
 		if err != nil {
@@ -813,22 +819,32 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 		}
 		loggo.Info("lcov add newinfo %s %s %s", covfile, sourcefile, newinfo)
 
-		// lcov -a oldinfo.info -a newinfo.info -o oldinfo.info
-		cmd = exec.Command("bash", "-c", *lcov+" -a "+oldinfo+" -a "+newinfo+" -o "+oldinfo)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			loggo.Error("exec Command failed with %s %s %s %s", string(out), err, oldinfo, newinfo)
-			return err
-		}
-
-		if !common.FileExists(oldinfo) {
-			loggo.Error("lcov_add no oldinfo %s", oldinfo)
+		if !common.FileExists(newinfo) {
+			loggo.Error("lcov_add no newinfo %s", newinfo)
 			return errors.New("no file")
 		}
 
-		os.Remove(newinfo)
+		if common.FileFind(newinfo, "DA:") <= 0 {
+			os.Remove(newinfo)
+			loggo.Info("lcov_add newinfo empty %s %s", sourcefile, oldinfo)
+		} else {
+			// lcov -a oldinfo.info -a newinfo.info -o oldinfo.info
+			cmd = exec.Command("bash", "-c", *lcov+" -a "+oldinfo+" -a "+newinfo+" -o "+oldinfo)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				loggo.Error("exec Command failed with %s %s %s %s", string(out), err, oldinfo, newinfo)
+				return err
+			}
 
-		loggo.Info("lcov_add ok %s %s", sourcefile, oldinfo)
+			if !common.FileExists(oldinfo) {
+				loggo.Error("lcov_add no oldinfo %s", oldinfo)
+				return errors.New("no file")
+			}
+
+			os.Remove(newinfo)
+
+			loggo.Info("lcov_add ok %s %s", sourcefile, oldinfo)
+		}
 	}
 
 	return nil
@@ -911,7 +927,18 @@ func lcov_merge(covfile string, sourcefile string, clientsoucefile string, sourc
 			return err
 		}
 
-		loggo.Info("lcov_merge new %s %s", sourcefile, oldinfo)
+		if !common.FileExists(oldinfo) {
+			loggo.Error("lcov_merge no oldinfo %s", oldinfo)
+			return errors.New("no file")
+		}
+
+		if common.FileFind(oldinfo, "DA:") <= 0 {
+			os.Remove(oldinfo)
+			loggo.Info("lcov_merge new empty %s %s", sourcefile, oldinfo)
+		} else {
+			loggo.Info("lcov_merge new %s %s", sourcefile, oldinfo)
+		}
+
 	} else {
 		newinfo, err := gen_tmp_file(id + "_new.info")
 		if err != nil {
@@ -938,22 +965,32 @@ func lcov_merge(covfile string, sourcefile string, clientsoucefile string, sourc
 			return err
 		}
 
-		// lcov -a oldinfo.info -a newinfo.info -o oldinfo.info
-		cmd = exec.Command("bash", "-c", *lcov+" -a "+oldinfo+" -a "+newinfo+" -o "+oldinfo)
-		out, err = cmd.CombinedOutput()
-		if err != nil {
-			loggo.Error("exec Command failed with %s %s %s %s", string(out), err, oldinfo, newinfo)
-			return err
-		}
-
-		if !common.FileExists(oldinfo) {
-			loggo.Error("lcov_merge no oldinfo %s", oldinfo)
+		if !common.FileExists(newinfo) {
+			loggo.Error("lcov_merge no oldinfo %s", newinfo)
 			return errors.New("no file")
 		}
 
-		os.Remove(newinfo)
+		if common.FileFind(newinfo, "DA:") <= 0 {
+			os.Remove(newinfo)
+			loggo.Info("lcov_merge new empty %s %s", sourcefile, newinfo)
+		} else {
+			// lcov -a oldinfo.info -a newinfo.info -o oldinfo.info
+			cmd = exec.Command("bash", "-c", *lcov+" -a "+oldinfo+" -a "+newinfo+" -o "+oldinfo)
+			out, err = cmd.CombinedOutput()
+			if err != nil {
+				loggo.Error("exec Command failed with %s %s %s %s", string(out), err, oldinfo, newinfo)
+				return err
+			}
 
-		loggo.Info("lcov_merge ok %s %s", sourcefile, oldinfo)
+			if !common.FileExists(oldinfo) {
+				loggo.Error("lcov_merge no oldinfo %s", oldinfo)
+				return errors.New("no file")
+			}
+
+			os.Remove(newinfo)
+
+			loggo.Info("lcov_merge ok %s %s", sourcefile, oldinfo)
+		}
 	}
 
 	os.Remove(oldsourcefile)
