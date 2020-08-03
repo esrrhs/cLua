@@ -64,14 +64,19 @@ func main() {
 		NoLogColor: false,
 	})
 
+	var err error
+
 	if *ty == "client" {
-		ini_client()
+		err = ini_client()
 	} else if *ty == "server" {
-		ini_server()
+		err = ini_server()
 	} else if *ty == "gen" {
-		ini_gen()
+		err = ini_gen()
 	}
 
+	if err != nil {
+		os.Exit(-1)
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////////
