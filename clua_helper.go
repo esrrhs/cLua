@@ -48,6 +48,8 @@ var lastresultdata = flag.String("lastresultdata", "", "merge last save result d
 var checkinter = flag.Int("checkinter", 60, "client check inter in second")
 var sendinter = flag.Int("sendinter", 3600, "client send inter in second")
 var statichtml = flag.String("statichtml", "static", "static html prefix")
+var deletetmp = flag.Bool("deletetmp", true, "delete tmp path data")
+var skipdiff = flag.Int("skipdiff", 50, "skip diff percent")
 
 func main() {
 
@@ -446,7 +448,7 @@ func clear_invalid_file(pids []int) {
 		}
 
 		if !find {
-			os.Remove(path)
+			osremove(path)
 		}
 		return nil
 	})
@@ -768,11 +770,19 @@ func gen_tmp_file(filename string) (string, error) {
 		return "", err
 	}
 
+	needcheck := false
 	if len(filename) <= 0 {
 		filename = common.UniqueId()
+		needcheck = true
 	}
 	filename += ".tmp"
 	dstfile := filepath.Join(thetmppath, filename)
+	if needcheck {
+		if common.FileExists(dstfile) {
+			loggo.Error("gen_tmp_file Exists %s", dstfile)
+			return "", errors.New("file Exists")
+		}
+	}
 	return dstfile, nil
 }
 
@@ -800,7 +810,7 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 		}
 
 		if common.FileFind(oldinfo, "DA:") <= 0 {
-			os.Remove(oldinfo)
+			osremove(oldinfo)
 			loggo.Info("lcov_add new empty %s %s", sourcefile, oldinfo)
 		} else {
 			loggo.Info("lcov_add new %s %s", sourcefile, oldinfo)
@@ -829,7 +839,7 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 		}
 
 		if common.FileFind(newinfo, "DA:") <= 0 {
-			os.Remove(newinfo)
+			osremove(newinfo)
 			loggo.Info("lcov_add newinfo empty %s %s", sourcefile, oldinfo)
 		} else {
 			// lcov -a oldinfo.info -a newinfo.info -o oldinfo.info
@@ -845,13 +855,30 @@ func lcov_add(covfile string, sourcefile string, id string) error {
 				return errors.New("no file")
 			}
 
-			os.Remove(newinfo)
+			osremove(newinfo)
 
 			loggo.Info("lcov_add ok %s %s", sourcefile, oldinfo)
 		}
 	}
 
 	return nil
+}
+
+func get_change_lines(sourcefile string, clientsoucefile string) (int, int, error) {
+	cmd := exec.Command("bash", "-c", "diff -y --suppress-common-lines "+sourcefile+" "+clientsoucefile+" | wc -l ")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		loggo.Error("exec Command failed with %s", err)
+		return 0, 0, err
+	}
+	str := string(out)
+	str = strings.TrimSpace(str)
+	n, err := strconv.Atoi(str)
+	if err != nil {
+		loggo.Error("Atoi failed with %s", err)
+		return 0, 0, err
+	}
+	return n, common.FileLineCount(sourcefile), nil
 }
 
 func lcov_merge(covfile string, sourcefile string, clientsoucefile string, source map[string]SouceData, id string) error {
@@ -874,6 +901,18 @@ func lcov_merge(covfile string, sourcefile string, clientsoucefile string, sourc
 		return err
 	}
 
+	diffn, newn, err := get_change_lines(sourcefile, oldsourcefile)
+	if err != nil {
+		loggo.Error("get_change_lines failed with %s", err)
+		return err
+	}
+
+	if newn*(*skipdiff)/100 < diffn {
+		loggo.Info("change too much, skip merge %s %d %d", sourcefile, newn, diffn)
+		osremove(oldsourcefile)
+		return nil
+	}
+
 	difffile, err := gen_tmp_file("")
 	if err != nil {
 		loggo.Error("gen_tmp_file failed with %s", err)
@@ -885,7 +924,7 @@ func lcov_merge(covfile string, sourcefile string, clientsoucefile string, sourc
 	cmd.CombinedOutput()
 
 	if !common.FileExists(difffile) {
-		loggo.Error("lcov_add no difffile %s", oldinfo)
+		loggo.Error("lcov_merge no difffile %s", oldinfo)
 		return errors.New("no file")
 	}
 	loggo.Info("lcov_merge old sourcefile %s, new sourcefile %s, diff file %s", oldsourcefile, sourcefile, difffile)
@@ -906,10 +945,19 @@ func lcov_merge(covfile string, sourcefile string, clientsoucefile string, sourc
 	}
 
 	if !common.FileExists(oldsourceinfo) {
-		loggo.Error("lcov_add no oldsourceinfo %s", oldsourceinfo)
+		loggo.Error("lcov_merge no oldsourceinfo %s", oldsourceinfo)
 		return errors.New("no file")
 	}
+
 	loggo.Info("lcov_merge old sourcefile %s, cov file %s, old info %s", oldsourcefile, covfile, oldsourceinfo)
+
+	if common.FileFind(oldsourceinfo, "DA:") <= 0 {
+		loggo.Info("lcov_merge oldsourceinfo empty %s %s", oldsourceinfo, oldinfo)
+		osremove(oldsourcefile)
+		osremove(difffile)
+		osremove(oldsourceinfo)
+		return nil
+	}
 
 	if !common.FileExists(oldinfo) {
 		// lcov --diff oldsourceinfo.info difffile --convert-filenames -o oldinfo.info
@@ -937,7 +985,7 @@ func lcov_merge(covfile string, sourcefile string, clientsoucefile string, sourc
 		}
 
 		if common.FileFind(oldinfo, "DA:") <= 0 {
-			os.Remove(oldinfo)
+			osremove(oldinfo)
 			loggo.Info("lcov_merge new empty %s %s", sourcefile, oldinfo)
 		} else {
 			loggo.Info("lcov_merge new %s %s", sourcefile, oldinfo)
@@ -975,7 +1023,7 @@ func lcov_merge(covfile string, sourcefile string, clientsoucefile string, sourc
 		}
 
 		if common.FileFind(newinfo, "DA:") <= 0 {
-			os.Remove(newinfo)
+			osremove(newinfo)
 			loggo.Info("lcov_merge new empty %s %s", sourcefile, newinfo)
 		} else {
 			// lcov -a oldinfo.info -a newinfo.info -o oldinfo.info
@@ -991,15 +1039,15 @@ func lcov_merge(covfile string, sourcefile string, clientsoucefile string, sourc
 				return errors.New("no file")
 			}
 
-			os.Remove(newinfo)
+			osremove(newinfo)
 
 			loggo.Info("lcov_merge ok %s %s", sourcefile, oldinfo)
 		}
 	}
 
-	os.Remove(oldsourcefile)
-	os.Remove(difffile)
-	os.Remove(oldsourceinfo)
+	osremove(oldsourcefile)
+	osremove(difffile)
+	osremove(oldsourceinfo)
 
 	return nil
 }
@@ -1024,6 +1072,8 @@ func gen_cov_sourcefile(covfile string, sourcefile string, source map[string]Sou
 		loggo.Info("current no source file %s %s %s %s, skip", sourcefile, rela, filepath.Join(*clientroot, rela), filepath.Clean(filepath.Join(*clientroot, rela)))
 		return nil
 	}
+
+	loggo.Info("start gen_cov_sourcefile from %s to %s", clientsoucefile, sourcefile)
 
 	if sourcedata.Md5sum == cursourcedata.Md5sum {
 		return lcov_add(covfile, sourcefile, cursourcedata.Id)
@@ -1133,7 +1183,7 @@ func merge_covdata_file(covdata [][]byte) (string, error) {
 	}
 
 	for _, tmpfile := range tmplist {
-		os.Remove(tmpfile)
+		osremove(tmpfile)
 	}
 
 	loggo.Info("merge_covdata_file ok %s", dst)
@@ -1192,7 +1242,7 @@ func gen_data_file(filename string, cursource map[string]SouceData, index int, t
 		return err
 	}
 
-	os.Remove(covfile)
+	osremove(covfile)
 
 	loggo.Info("gen file ok %s %d/%d", filename, index+1, total)
 
@@ -1214,7 +1264,7 @@ func remove_all_tmp() {
 			return nil
 		}
 
-		os.Remove(path)
+		osremove(path)
 		return nil
 	})
 }
@@ -1298,7 +1348,7 @@ func save_resultfile(resultfile string, cursource map[string]SouceData) error {
 		return err
 	}
 
-	os.Remove(covflle)
+	osremove(covflle)
 
 	loggo.Info("save_resultfile ok %s %d", filename, len(data))
 
@@ -1394,14 +1444,14 @@ func merge_result_info(cursource map[string]SouceData) error {
 			return err
 		}
 
-		os.Remove(lastresultfile)
+		osremove(lastresultfile)
 
 	} else {
 		loggo.Info("no info, merge_result_info skip %s", *htmloutputpath)
 	}
 
 	for _, oldinfo := range inputlist {
-		os.Remove(oldinfo)
+		osremove(oldinfo)
 	}
 
 	return nil
@@ -1439,10 +1489,16 @@ func ini_gen() error {
 	if *deletecov {
 		for _, filename := range filelist {
 			if filename != lastresult_filename {
-				os.Remove(filename)
+				osremove(filename)
 			}
 		}
 	}
 
 	return nil
+}
+
+func osremove(file string) {
+	if *deletetmp {
+		os.Remove(file)
+	}
 }
