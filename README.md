@@ -13,6 +13,7 @@ lua的代码覆盖率工具
 * 配合lua_helper搭建覆盖率统计服务
 
 # 编译
+* 安装lua 5.3
 * 编译libclua.so
 ```
 # cmake .
