@@ -19,6 +19,6 @@ jobs:
         go-version: 1.15
 
     - name: Build
-      run: 
+      run: |
         go get "github.com/milochristiansen/lua/ast"
         go build clua.go
