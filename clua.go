@@ -414,7 +414,11 @@ func do_showfunc(f FileData, filecontent []string, block []ast.Stmt) {
 		funcmaxline := 0
 		funcvalidline := make(map[int]int)
 		fv := luaVisitor{f: func(n ast.Node) {
-			funcvalidline[n.Line()]++
+			switch nn := n.(type) {
+			case *ast.Goto:
+			default:
+				funcvalidline[nn.Line()]++
+			}
 			if n.Line() > funcmaxline {
 				funcmaxline = n.Line()
 			}
@@ -480,7 +484,11 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, validline m
 		funcmaxline := 0
 		funcvalidline := make(map[int]int)
 		fv := luaVisitor{f: func(n ast.Node) {
-			funcvalidline[n.Line()]++
+			switch nn := n.(type) {
+			case *ast.Goto:
+			default:
+				funcvalidline[nn.Line()]++
+			}
 			if n.Line() > funcmaxline {
 				funcmaxline = n.Line()
 			}
@@ -522,7 +530,11 @@ func do_lcovfile(f FileData, filecontent []string, block []ast.Stmt, validline m
 		funcmaxline := 0
 		funcvalidline := make(map[int]int)
 		fv := luaVisitor{f: func(n ast.Node) {
-			funcvalidline[n.Line()]++
+			switch nn := n.(type) {
+			case *ast.Goto:
+			default:
+				funcvalidline[nn.Line()]++
+			}
 			if n.Line() > funcmaxline {
 				funcmaxline = n.Line()
 			}
