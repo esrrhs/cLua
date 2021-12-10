@@ -606,7 +606,11 @@ func calc(f FileData, showcode bool, showtotal bool, showfunc bool, lcovfd *os.F
 
 	validline := make(map[int]int)
 	v := luaVisitor{f: func(n ast.Node) {
-		validline[n.Line()]++
+		switch nn := n.(type) {
+		case *ast.Goto:
+		default:
+			validline[nn.Line()]++
+		}
 	}}
 	for _, stmt := range block {
 		ast.Walk(&v, stmt)
