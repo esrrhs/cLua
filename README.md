@@ -1,7 +1,7 @@
 # cLua
 [<img src="https://img.shields.io/github/license/esrrhs/cLua">](https://github.com/esrrhs/cLua)
 [<img src="https://img.shields.io/github/languages/top/esrrhs/cLua">](https://github.com/esrrhs/cLua)
-[<img src="https://img.shields.io/github/workflow/status/esrrhs/cLua/Go">](https://github.com/esrrhs/cLua/actions)
+[<img src="https://img.shields.io/github/actions/workflow/status/esrrhs/cLua/go.yml?branch=master">](https://github.com/esrrhs/cLua/actions)
 
 lua的代码覆盖率工具
 
