@@ -79,6 +79,7 @@ int gcount;
 int glasttime;
 std::string gfile;
 int gautosave;
+int gpause;
 
 static void flush_file(int fd, const char *buf, size_t len) {
     while (len > 0) {
@@ -106,7 +107,12 @@ static void flush() {
     close(fd);
 }
 
+
 static void hook_handler(lua_State *L, lua_Debug *par) {
+    if (gpause) {
+        return;
+    }
+
     if (par->event != LUA_HOOKLINE) {
         LERR("hook_handler diff event %d", par->event);
         return;
@@ -171,8 +177,20 @@ extern "C" void stop_cov(lua_State *L) {
     gdata.clear();
 }
 
+static int lpause(lua_State *L) {
+    gpause = 1;
+    return 0;
+}
+
+static int lresume(lua_State *L) {
+    gpause = 0;
+    return 0;
+}
+
+
 static int lstart(lua_State *L) {
     const char *file = lua_tostring(L, 1);
+    printf("file %s\n", file);
     int autosave = (int) lua_tointeger(L, 2);
     start_cov(L, file, autosave);
     return 0;
@@ -188,6 +206,8 @@ extern "C" int luaopen_libclua(lua_State *L) {
     luaL_Reg l[] = {
             {"start", lstart},
             {"stop",  lstop},
+            { "pause", lpause},
+            {"resume", lresume},
             {NULL,    NULL},
     };
     luaL_newlib(L, l);
