@@ -190,7 +190,6 @@ static int lresume(lua_State *L) {
 const char* default_file = "luacov.data";
 static int lstart(lua_State *L) {
     const char *file = lua_tostring(L, 1);
-    printf("file %s\n", file);
     if (file == NULL) {
         file = default_file;
     }
@@ -209,7 +208,7 @@ extern "C" int luaopen_libclua(lua_State *L) {
     luaL_Reg l[] = {
             {"start", lstart},
             {"stop",  lstop},
-            { "pause", lpause},
+            {"pause", lpause},
             {"resume", lresume},
             {NULL,    NULL},
     };
