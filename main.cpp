@@ -187,10 +187,13 @@ static int lresume(lua_State *L) {
     return 0;
 }
 
-
+const char* default_file = "luacov.data";
 static int lstart(lua_State *L) {
     const char *file = lua_tostring(L, 1);
     printf("file %s\n", file);
+    if (file == NULL) {
+        file = default_file;
+    }
     int autosave = (int) lua_tointeger(L, 2);
     start_cov(L, file, autosave);
     return 0;
