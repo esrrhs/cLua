@@ -296,8 +296,8 @@ coverage of /home/project/cLua/test.lua:
 
 ## 相关项目
 
-* [hookso](https://github.com/esrrhs/hookso): Linux 动态库注入与函数调用工具
-* [lua全家桶](https://github.com/esrrhs/lua-family-bucket): 汇集各类 Lua 工具与库
+- [lua-family-bucket](https://github.com/esrrhs/lua-family-bucket)
+- [hookso](https://github.com/esrrhs/hookso)
 
 ---
 
