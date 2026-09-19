@@ -296,8 +296,8 @@ After generation, visit `http://server_ip:8877/static/` in your browser to inspe
 
 ## Related Projects
 
-* [hookso](https://github.com/esrrhs/hookso): Linux shared library injection and symbol execution tool.
-* [lua-family-bucket](https://github.com/esrrhs/lua-family-bucket): Collection of useful Lua tools and libraries.
+- [lua-family-bucket](https://github.com/esrrhs/lua-family-bucket)
+- [hookso](https://github.com/esrrhs/hookso)
 
 ---
 
