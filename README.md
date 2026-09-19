@@ -1,87 +1,175 @@
 # cLua
+
+[English](README.md) | [简体中文](README_zh.md)
+
 [<img src="https://img.shields.io/github/license/esrrhs/cLua">](https://github.com/esrrhs/cLua)
 [<img src="https://img.shields.io/github/languages/top/esrrhs/cLua">](https://github.com/esrrhs/cLua)
 [<img src="https://img.shields.io/github/actions/workflow/status/esrrhs/cLua/go.yml?branch=master">](https://github.com/esrrhs/cLua/actions)
 
-lua的代码覆盖率工具
+A high-performance, lightweight code coverage tool for Lua (supports Lua 5.3+). Built with a C++ data collection engine and a Go-based AST parser to provide precise, low-overhead line and function coverage statistics.
 
-# 特性
-* 数据采集用C++编写，性能更高，对宿主进程影响更小
-* 简单require即可使用，或通过[hookso](https://github.com/esrrhs/hookso)注入
-* 解析器用go编写，通过解析lua语法，精确计算文件及函数的覆盖率
-* 支持输出[lcov](http://ltp.sourceforge.net/coverage/lcov.php)格式，进而可生成html格式的图形展示
-* 配合lua_helper搭建覆盖率统计服务
+---
 
-# 编译
-* 安装lua 5.3
-* 编译libclua.so
-```
-# cmake .
-# make
-```
-* 编译clua解析工具
-```
-# go get "github.com/milochristiansen/lua" 
-# go build clua.go
-```
-* 编译cluahelper覆盖率服务
-```
-# go get "github.com/esrrhs/go-engine/src/common"
-# go get "github.com/esrrhs/go-engine/src/fastwalk"
-# go get "github.com/esrrhs/go-engine/src/loggo"
-# go build clua_helper.go
+## Table of Contents
+
+- [Features](#features)
+- [Architecture & Workflow](#architecture--workflow)
+- [Prerequisites](#prerequisites)
+- [Build and Installation](#build-and-installation)
+- [Usage Guide](#usage-guide)
+  - [Method 1: Direct Embedding in Lua Scripts](#method-1-direct-embedding-in-lua-scripts)
+  - [Method 2: Dynamic Process Injection via hookso](#method-2-dynamic-process-injection-via-hookso)
+- [Analyzing & Visualizing Results](#analyzing--visualizing-results)
+  - [Terminal Console Output](#terminal-console-output)
+  - [Generating LCOV and HTML Visual Reports](#generating-lcov-and-html-visual-reports)
+- [Automated Coverage Service (CluaHelper)](#automated-coverage-service-cluahelper)
+- [Related Projects](#related-projects)
+- [License](#license)
+
+---
+
+## Features
+
+* 🚀 **High Performance & Low Overhead**: The core data collection library is written in C++ with minimal Lua hook overhead, keeping the performance impact on host applications to an absolute minimum.
+* 🔌 **Flexible Integration**: Can be imported directly within scripts using `require "libclua"` or dynamically injected into running production/testing processes via [hookso](https://github.com/esrrhs/hookso) without requiring server restarts or code changes.
+* 🎯 **Precise AST Analysis**: The parser is written in Go and analyzes the Lua syntax tree (AST) to compute exact file-level and function-level line coverage metrics and execution counts.
+* ⏸️ **Pause & Resume**: Supports `cl.pause()` and `cl.resume()` to selectively exclude critical or non-target code segments during testing.
+* 📊 **Rich Visual Reports**: Exports to standard [LCOV](http://ltp.sourceforge.net/coverage/lcov.php) format, allowing seamless HTML report generation with `genhtml`.
+* 🌐 **Automated Coverage Service**: Provides `clua_helper` with Client, Server, and Generator modes to automate injection, aggregation, and web hosting across multiple testing environments.
+
+---
+
+## Architecture & Workflow
+
+```text
++-----------------------+
+|  Target Process (Lua) |
+|  +-----------------+  |
+|  |   libclua.so    |  |  == (write coverage) ==>  test.cov (Binary Data)
+|  +-----------------+  |                                  |
++-----------------------+                                  |
+                                                           v
+                                                  +-----------------+
+                                                  |   clua (CLI)    |
+                                                  +-----------------+
+                                                     |           |
+                                    (Terminal Stats) v           v (Export LCOV)
+                                       Function & File       test.info
+                                       Coverage Rates            |
+                                                                 v (genhtml)
+                                                           HTML Dashboard
 ```
 
-# 使用
-* 直接嵌入lua脚本中使用，lua文件里使用如下
+---
+
+## Prerequisites
+
+* **OS**: Linux (x86_64)
+* **Lua**: 5.3 or higher (development headers and libraries such as `lua.h` required)
+* **C++ Compiler**: GCC / Clang (with C++11 support)
+* **CMake**: 2.8 or higher
+* **Go**: 1.19 or higher
+* **LCOV** (optional, for HTML reports): install via `apt install lcov` or `yum install lcov`
+
+---
+
+## Build and Installation
+
+### 1. Build C++ Collector Library (`libclua.so`)
+```bash
+cmake .
+make
 ```
--- 加载libclua.so
+This generates `libclua.so` in the current directory.
+
+### 2. Build Coverage Parser (`clua`)
+```bash
+go build clua.go
+```
+This compiles the `clua` command-line utility used to parse binary coverage files.
+
+### 3. Build Coverage Service (`clua_helper`)
+```bash
+go build clua_helper.go
+```
+This compiles `clua_helper`, which provides client, server, and report generator services.
+
+---
+
+## Usage Guide
+
+### Method 1: Direct Embedding in Lua Scripts
+
+Load and start the coverage collector inside your Lua scripts:
+
+```lua
+-- 1. Load libclua.so
 local cl = require "libclua"
--- 开始记录执行过程，生成结果文件
--- 第一个参数为结果文件的文件名
--- 第二个参数为定时生成结果文件的间隔（秒），0表示关闭
+
+-- 2. Start recording coverage
+-- Parameter 1: Output coverage file path (default: "luacov.data")
+-- Parameter 2: Periodic auto-save interval in seconds (0 = disabled, flushes only on cl.stop())
 cl.start("test.cov", 5)
 
--- 执行某些事情
+-- (Optional) Pause and resume coverage collection as needed
+-- cl.pause()
+-- cl.resume()
+
+-- 3. Execute your workload
 do_something()
 
--- 结束记录
+-- 4. Stop recording and flush data to disk
 cl.stop()
 ```
-* 或者使用[hookso](https://github.com/esrrhs/hookso)注入到进程中（假设进程id为PID），手动开启
-```
-a) 首先获取进程中的Lua_State指针，比如进程调用了lua_settop(L)函数，那么就取第一个参数
-# ./hookso arg $PID liblua.so lua_settop 1 
-123456
 
-b) 加载libclua.so
-# ./hookso dlopen $PID ./libclua.so
+> **Note**: Ensure `LUA_CPATH` includes the directory containing `libclua.so`, for example: `LUA_CPATH="./?.so;;" lua test.lua`.
 
-c) 执行libclua.so的start_cov手动开启，等价于start_cov(L, "./test.cov", 5)
-# ./hookso call $PID libclua.so start_cov i=123456 s="./test.cov" i=5
+---
 
-c) 执行libclua.so的stop_cov手动关闭，等价于stop_cov(L)
-# ./hookso call $PID libclua.so stop_cov i=123456
-```
-* 执行完上述两种方法的任一一种，用clua解析test.cov查看结果。clua更多参数参考-h
-```
-# ./clua -i test.cov
+### Method 2: Dynamic Process Injection via hookso
+
+Using [hookso](https://github.com/esrrhs/hookso), you can inject coverage collection into a running process without stopping or recompiling it:
+
+1. **Obtain the `lua_State*` pointer in the target process**:
+   For example, inspect the first argument of `lua_settop(L)` (assuming the process ID is `$PID`):
+   ```bash
+   ./hookso arg $PID liblua.so lua_settop 1
+   # Example output: 123456
+   ```
+
+2. **Inject and load `libclua.so`**:
+   ```bash
+   ./hookso dlopen $PID ./libclua.so
+   ```
+
+3. **Call `start_cov` to begin profiling**:
+   Equivalent to invoking `start_cov(L, "./test.cov", 5)` inside the process:
+   ```bash
+   ./hookso call $PID libclua.so start_cov i=123456 s="./test.cov" i=5
+   ```
+
+4. **Call `stop_cov` to stop profiling and flush data**:
+   Equivalent to invoking `stop_cov(L)`:
+   ```bash
+   ./hookso call $PID libclua.so stop_cov i=123456
+   ```
+
+---
+
+## Analyzing & Visualizing Results
+
+### Terminal Console Output
+
+Parse the generated coverage file with the `clua` utility:
+
+```bash
+./clua -i test.cov
 ```
 
-# 示例
-* 运行test.lua
-```
-# lua5.3 ./test.lua
-```
-* 查看目录下，已有test.cov文件
-```
-# ll test.cov
-```
-* 查看结果，每行前面的数字表示执行的次数，空表示没被执行，方便定位潜在bug。最后几行显示了总体覆盖率，以及每个函数的覆盖率
-```
-# ./clua -i test.cov     
+Example output:
+```text
 total points = 27, files = 1
-coverage of /home/project/clua/test.lua:
+coverage of /home/project/cLua/test.lua:
     local cl = require "libclua"
     cl.start("test.cov", 5)
     
@@ -139,49 +227,80 @@ coverage of /home/project/clua/test.lua:
     
 1   cl.stop()
     
-/home/project/clua/test.lua total coverage 78% 22/28
-/home/project/clua/test.lua function coverage [function test1(i)] 66% 2/3
-/home/project/clua/test.lua function coverage [function test2(i)] 100% 3/3
-/home/project/clua/test.lua function coverage [function test3(i)] 66% 2/3
-/home/project/clua/test.lua function coverage [test4 = function(i)] 75% 3/4
-/home/project/clua/test.lua function coverage [local function test5(i)] 100% 1/1
+/home/project/cLua/test.lua total coverage 78% 22/28
+/home/project/cLua/test.lua function coverage [function test1(i)] 66% 2/3
+/home/project/cLua/test.lua function coverage [function test2(i)] 100% 3/3
+/home/project/cLua/test.lua function coverage [function test3(i)] 66% 2/3
+/home/project/cLua/test.lua function coverage [test4 = function(i)] 75% 3/4
+/home/project/cLua/test.lua function coverage [local function test5(i)] 100% 1/1
 ```
-* 也用lcov查看
-```
-# ./clua -i test.cov -lcov test.info    
-```
-* 此时目录下已有```test.info```文件，然后用lcov的工具输出html
-```
-# genhtml -o htmltest test.info 
-```
-* 打开htmltest目录下的index.html如下
-![image](./lcov1.png)
-* 点击进入test.lua
-![image](./lcov2.png)
-* lcov还可以对info文件进行合并，更多操作参考官方文档
+The number preceding each line indicates its execution count, while blank entries indicate unexecuted lines. Overall file coverage and per-function coverage summaries are displayed at the end.
 
-## 覆盖率服务CluaHelper
-覆盖率服务分为客户端、服务器、生成器三部分，二进制文件为clua_helper，参数通过```./clua_helper -h```查看。
+---
 
-#### CluaHelper客户端
-客户端搜索宿主进程，注入进程，打开覆盖率统计，监控代码路径变化，最后发送数据到服务器
-```
-# ./clua_helper -type client -bin 宿主bin名字 -getluastate "获取LuaState的指令，如：liblua.so lua_settop 1" -path 代码目录 -server http://server_ip:8877
+### Generating LCOV and HTML Visual Reports
+
+1. Export coverage data to standard LCOV info format:
+   ```bash
+   ./clua -i test.cov -lcov test.info
+   ```
+
+2. Generate an HTML dashboard using LCOV's `genhtml`:
+   ```bash
+   genhtml -o htmltest test.info
+   ```
+
+3. Open `htmltest/index.html` to explore the overview report:
+   ![LCOV Overview](./lcov1.png)
+
+4. Click into individual source files for line-by-line coverage details:
+   ![LCOV Detail](./lcov2.png)
+
+> **Tip**: Multiple `.info` files can be merged together using `lcov` (`lcov -a run1.info -a run2.info -o merged.info`) to combine coverage from multiple test runs.
+
+---
+
+## Automated Coverage Service (CluaHelper)
+
+`clua_helper` provides an automated coverage collection system supporting **Client**, **Server**, and **Generator (Gen)** modes. Run `./clua_helper -h` to see all available flags.
+
+### 1. CluaHelper Client
+Runs on the target host, discovers target processes, injects `libclua.so`, monitors source code changes, and reports coverage files periodically to the server:
+```bash
+./clua_helper -type client \
+  -bin target_binary_name \
+  -getluastate "command_to_get_lua_state, e.g.: liblua.so lua_settop 1" \
+  -path /path/to/source/code \
+  -server http://server_ip:8877
 ```
 
-#### CluaHelper服务端
-服务器接受客户端的数据，保存数据文件到本地，同时对外服务html结果目录的静态网页。
-```
-# ./clua_helper -type server -port 8877
+### 2. CluaHelper Server
+Runs on the central server, receives coverage reports from clients, stores files locally, and serves the generated static HTML dashboard:
+```bash
+./clua_helper -type server -port 8877
 ```
 
-#### CluaHelper生成器
-生成器读取服务器保存的数据文件，根据本地代码，自动把结果合并，最后生成html结果目录。
+### 3. CluaHelper Generator
+Runs on the central server to aggregate received coverage files, merge results with source code, and generate static HTML reports:
+```bash
+./clua_helper -type gen \
+  -covpath /path/to/server/saved/cov \
+  -path /path/to/local/source/code \
+  -clientpath /path/to/client/source/code
 ```
-# ./clua_helper -type gen -covpath 服务端保存的结果目录 -path 本地的代码目录 -clientpath 客户端的代码目录
-```
-最后访问http://server_ip:8877/static/即可显示如下网页
-![image](./lcov1.png)
 
-## 其他
-[lua全家桶](https://github.com/esrrhs/lua-family-bucket)
+After generation, visit `http://server_ip:8877/static/` in your browser to inspect the live dashboard:
+![LCOV Web Report](./lcov1.png)
+
+---
+
+## Related Projects
+
+* [hookso](https://github.com/esrrhs/hookso): Linux shared library injection and symbol execution tool.
+* [lua-family-bucket](https://github.com/esrrhs/lua-family-bucket): Collection of useful Lua tools and libraries.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
