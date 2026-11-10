@@ -16,6 +16,7 @@ A high-performance, lightweight code coverage tool for Lua (supports Lua 5.3+). 
 - [Architecture & Workflow](#architecture--workflow)
 - [Prerequisites](#prerequisites)
 - [Build and Installation](#build-and-installation)
+- [Reproducible Build & Tests](#reproducible-build--tests)
 - [Usage Guide](#usage-guide)
   - [Method 1: Direct Embedding in Lua Scripts](#method-1-direct-embedding-in-lua-scripts)
   - [Method 2: Dynamic Process Injection via hookso](#method-2-dynamic-process-injection-via-hookso)
@@ -67,32 +68,53 @@ A high-performance, lightweight code coverage tool for Lua (supports Lua 5.3+). 
 * **OS**: Linux (x86_64)
 * **Lua**: 5.3 or higher (development headers and libraries such as `lua.h` required)
 * **C++ Compiler**: GCC / Clang (with C++11 support)
-* **CMake**: 2.8 or higher
-* **Go**: 1.19 or higher
+* **CMake**: 3.13 or higher
+* **Go**: 1.19 or higher (must match `go.mod` and CI; `go.sum` is required for a reproducible module build)
 * **LCOV** (optional, for HTML reports): install via `apt install lcov` or `yum install lcov`
 
 ---
 
 ## Build and Installation
 
-### 1. Build C++ Collector Library (`libclua.so`)
+From a clean checkout, the supported entry point is:
+
 ```bash
-cmake .
 make
 ```
-This generates `libclua.so` in the current directory.
+
+This builds `libclua.so`, `clua`, and `clua_helper` in the current directory. The same steps can be run manually:
+
+### 1. Build C++ Collector Library (`libclua.so`)
+```bash
+cmake -S . -B build
+cmake --build build
+cp build/libclua.so .
+```
+This generates `libclua.so`. If `lua.h` is not on the default include path (for example it lives in `/usr/include/lua5.4`), pass `-DLUA_INCLUDE_DIR=/usr/include/lua5.4` to `cmake`.
 
 ### 2. Build Coverage Parser (`clua`)
 ```bash
-go build clua.go
+go build -mod=readonly -o clua clua.go
 ```
-This compiles the `clua` command-line utility used to parse binary coverage files.
+This compiles the `clua` command-line utility used to parse binary coverage files. `-mod=readonly` uses the pinned versions and checksums in `go.mod` / `go.sum`.
 
 ### 3. Build Coverage Service (`clua_helper`)
 ```bash
-go build clua_helper.go
+go build -mod=readonly -o clua_helper clua_helper.go
 ```
 This compiles `clua_helper`, which provides client, server, and report generator services.
+
+## Reproducible Build & Tests
+
+Go 1.19 is the required language version in `go.mod`, this README, and CI (`go-version-file: go.mod`). After changing Go module dependencies, run `go mod tidy` or `make tidy` and commit the updated `go.sum`. Do not disable module checksum verification.
+
+An automated end-to-end test exercises the documented workflow: load `libclua.so` from `test.lua`, write a coverage file, parse it with `clua`, and export LCOV. The test asserts that the coverage file is produced, that parse results include the expected file and function coverage, and that the LCOV output contains valid `TN` / `SF` / `DA` / `LF` / `LH` / `end_of_record` records.
+
+```bash
+make test
+# or, after `make`:
+go test -mod=readonly -count=1 ./e2e
+```
 
 ---
 

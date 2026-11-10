@@ -16,6 +16,7 @@ cLua 是一个针对 Lua 的高性能代码覆盖率统计工具（支持 Lua 5.
 - [架构流程](#架构流程)
 - [环境要求](#环境要求)
 - [编译构建](#编译构建)
+- [可复现构建与测试](#可复现构建与测试)
 - [使用方法](#使用方法)
   - [方式一：在 Lua 脚本中直接嵌入](#方式一在-lua-脚本中直接嵌入)
   - [方式二：通过 hookso 动态注入到运行中进程](#方式二通过-hookso-动态注入到运行中进程)
@@ -67,32 +68,53 @@ cLua 是一个针对 Lua 的高性能代码覆盖率统计工具（支持 Lua 5.
 * **OS**: Linux (x86_64)
 * **Lua**: 5.3 或更高版本（需安装 Lua 开发头文件及动态库，如 `lua.h`）
 * **C++ 编译器**: GCC / Clang（支持 C++11 及以上）
-* **CMake**: 2.8 及以上版本
-* **Go**: 1.19 及以上版本
+* **CMake**: 3.13 及以上版本
+* **Go**: 1.19 及以上版本（需与 `go.mod` 及 CI 保持一致；可复现的模块构建需要 `go.sum`）
 * **LCOV**（可选，用于生成 HTML 图表）：可通过 `apt install lcov` 或 `yum install lcov` 安装
 
 ---
 
 ## 编译构建
 
-### 1. 编译 C++ 采集动态库 (`libclua.so`)
+从干净的代码检出开始，推荐使用统一入口：
+
 ```bash
-cmake .
 make
 ```
-编译完成后，会在当前目录生成 `libclua.so`。
+
+这会在当前目录生成 `libclua.so`、`clua` 和 `clua_helper`。也可以按下面的步骤手动执行：
+
+### 1. 编译 C++ 采集动态库 (`libclua.so`)
+```bash
+cmake -S . -B build
+cmake --build build
+cp build/libclua.so .
+```
+编译完成后生成 `libclua.so`。若系统未将 `lua.h` 放在默认头文件路径中（例如位于 `/usr/include/lua5.4`），请向 `cmake` 传入 `-DLUA_INCLUDE_DIR=/usr/include/lua5.4`。
 
 ### 2. 编译覆盖率解析工具 (`clua`)
 ```bash
-go build clua.go
+go build -mod=readonly -o clua clua.go
 ```
-编译完成后，生成用于解析覆盖率文件的命令行工具 `clua`。
+编译完成后，生成用于解析覆盖率文件的命令行工具 `clua`。`-mod=readonly` 会使用 `go.mod` / `go.sum` 中锁定的版本与校验和。
 
 ### 3. 编译覆盖率服务组件 (`clua_helper`)
 ```bash
-go build clua_helper.go
+go build -mod=readonly -o clua_helper clua_helper.go
 ```
 编译完成后，生成分布式覆盖率服务工具 `clua_helper`。
+
+## 可复现构建与测试
+
+Go 1.19 是 `go.mod`、本 README 以及 CI（`go-version-file: go.mod`）中统一的语言版本要求。若变更了 Go 模块依赖，请运行 `go mod tidy` 或 `make tidy`，并将更新后的 `go.sum` 一并提交。不要关闭模块校验和验证。
+
+仓库提供自动化端到端测试，覆盖文档中的主流程：由 `test.lua` 加载 `libclua.so` 并写出覆盖率文件，再用 `clua` 解析并导出 LCOV。测试会断言覆盖率文件已生成、解析结果包含预期的文件级与函数级覆盖率，以及 LCOV 中含有有效的 `TN` / `SF` / `DA` / `LF` / `LH` / `end_of_record` 记录。
+
+```bash
+make test
+# 或在 `make` 之后：
+go test -mod=readonly -count=1 ./e2e
+```
 
 ---
 

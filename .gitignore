@@ -13,3 +13,21 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# CMake / local build trees
+/build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+
+# Built command-line tools (libclua.so is already covered by *.so)
+/clua
+/clua_helper
+
+# Coverage artifacts
+*.cov
+*.info
+/htmltest/
+luacov.log
+luacov.data
